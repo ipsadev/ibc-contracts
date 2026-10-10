@@ -10,6 +10,18 @@ pub const CURRENT_SYNC_COMMITTEE_GINDEX_ELECTRA: u64 = 86;
 /// `get_generalized_index(BeaconState, 'next_sync_committee')` (= 87)
 pub const NEXT_SYNC_COMMITTEE_GINDEX_ELECTRA: u64 = 87;
 
+// https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/light-client/sync-protocol.md#constants
+/// `get_generalized_index(BeaconState, 'finalized_checkpoint', 'root')` in gloas (= 735)
+pub const FINALIZED_ROOT_GINDEX_GLOAS: u64 = 735;
+/// `get_generalized_index(BeaconState, 'current_sync_committee')` in gloas (= 2945)
+pub const CURRENT_SYNC_COMMITTEE_GINDEX_GLOAS: u64 = 2945;
+/// `get_generalized_index(BeaconState, 'next_sync_committee')` in gloas (= 2946)
+pub const NEXT_SYNC_COMMITTEE_GINDEX_GLOAS: u64 = 2946;
+/// `get_generalized_index(BeaconBlockBody, 'signed_execution_payload_bid', 'message', 'parent_block_hash')` (= 2856)
+pub const EXECUTION_BLOCK_HASH_GINDEX_GLOAS: u64 = 2856;
+/// `get_generalized_index(BeaconBlockBody, 'execution_payload', 'block_hash')` from deneb to fulu (= 812)
+pub const EXECUTION_BLOCK_HASH_GINDEX_DENEB: u64 = 812;
+
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/capella/light-client/sync-protocol.md#constants
 /// `get_generalized_index(BeaconBlockBody, 'execution_payload')` (= 25)
 pub const EXECUTION_PAYLOAD_GINDEX: u64 = 25;
