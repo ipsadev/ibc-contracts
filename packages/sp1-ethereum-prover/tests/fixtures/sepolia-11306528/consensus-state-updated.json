@@ -1,0 +1,10 @@
+{
+  "slot": 11306560,
+  "state_root": "0xbe06b013bae7b1da0140bc5973c6ce36fa51b28f6a7960dd50c438ad91e82519",
+  "timestamp": 1791412308,
+  "current_sync_committee": {
+    "pubkeys_hash": "0xed266ad44d00be994a9617488ade97e2711c60dc7779494d1d3575bef692976f",
+    "aggregate_pubkey": "0x8853c4ae6c22e6da4e5e41ae5a65b835e8caa79075df71e1a6d7de42be629b386885909c813e5655bdbaa2c6ada8e33a"
+  },
+  "next_sync_committee": null
+}
