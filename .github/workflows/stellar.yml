@@ -1,0 +1,215 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: stellar
+
+env:
+  SP1_VERSION: "6.1.0"
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'packages/stellar-light-client/**'
+      - 'packages/sp1-stellar-prover/**'
+      - 'ibc-solidity/programs/sp1-stellar-programs/**'
+      - 'programs/sp1-ethereum-programs/**'
+      - 'packages/ethereum/**'
+      - 'ibc-solidity/contracts/light-clients/sp1-stellar/**'
+      - 'ibc-solidity/test/sp1-stellar/**'
+      - 'Cargo.lock'
+      - '.github/workflows/stellar.yml'
+
+jobs:
+  additive:
+    name: upstream-untouched
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Refuse any Stellar file inside upstream's SP1 workspace
+        run: |
+          if git ls-files 'ibc-solidity/programs/sp1-programs' | grep -i stellar; then
+            echo "::error::A Stellar file is inside upstream's sp1-programs workspace."
+            echo "That workspace shares one Cargo.lock, so a new member re-resolves"
+            echo "upstream's dependency versions and moves its tendermint vkeys."
+            echo "Stellar guests belong in sp1-stellar-programs/, each its own workspace."
+            exit 1
+          fi
+          echo "upstream's sp1-programs workspace carries no Stellar files"
+
+  guests:
+    name: guests-and-vkeys
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up environment
+        uses: ./.github/actions/foundry-setup
+
+      - name: Cache SP1 Toolchain
+        id: cache-sp1-toolchain
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.sp1
+            ~/.rustup/toolchains/succinct
+          key: ${{ runner.os }}-sp1-toolchain-${{ env.SP1_VERSION }}
+
+      - name: Install SP1 toolchain
+        if: steps.cache-sp1-toolchain.outputs.cache-hit != 'true'
+        uses: nick-invision/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 5
+          command: |
+            curl -L https://sp1.succinct.xyz | bash
+            ~/.sp1/bin/sp1up --version ${{ env.SP1_VERSION }} --token ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the guests
+        run: |
+          for program in update-client membership uc-and-membership; do
+            (cd "ibc-solidity/programs/sp1-stellar-programs/$program" && cargo prove build --locked)
+          done
+          for program in update-client membership; do
+            (cd "programs/sp1-ethereum-programs/$program" && cargo prove build --locked)
+          done
+
+      - name: The ELFs must be reproducible
+        run: |
+          set -euo pipefail
+          for program in update-client membership uc-and-membership; do
+            elf="ibc-solidity/programs/sp1-stellar-programs/$program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/sp1-stellar-$program"
+            before="$(sha256sum "$elf" | cut -d' ' -f1)"
+            touch "packages/stellar-light-client/${program}/src/lib.rs"
+            (cd "ibc-solidity/programs/sp1-stellar-programs/$program" && cargo prove build --locked)
+            after="$(sha256sum "$elf" | cut -d' ' -f1)"
+            if [ "$before" != "$after" ]; then
+              echo "::error::$program does not build reproducibly: $before then $after"
+              exit 1
+            fi
+            echo "$program rebuilds to $after"
+          done
+
+          for program in update-client membership; do
+            elf="programs/sp1-ethereum-programs/$program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/sp1-ethereum-$program"
+            before="$(sha256sum "$elf" | cut -d' ' -f1)"
+            touch "programs/sp1-ethereum-programs/$program/src/wire.rs"
+            (cd "programs/sp1-ethereum-programs/$program" && cargo prove build --locked)
+            after="$(sha256sum "$elf" | cut -d' ' -f1)"
+            if [ "$before" != "$after" ]; then
+              echo "::error::ethereum-$program does not build reproducibly: $before then $after"
+              exit 1
+            fi
+            echo "ethereum-$program rebuilds to $after"
+          done
+
+      - name: The verifying keys must match the pinned ones
+        run: cargo run --release --locked -p sp1-stellar-prover --bin vkeys
+
+      - name: Collect the guest ELFs
+        run: |
+          set -euo pipefail
+          mkdir -p stellar-guests
+          for program in update-client membership uc-and-membership; do
+            cp "ibc-solidity/programs/sp1-stellar-programs/$program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/sp1-stellar-$program" stellar-guests/
+          done
+          for program in update-client membership; do
+            cp "programs/sp1-ethereum-programs/$program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/sp1-ethereum-$program" stellar-guests/
+          done
+          ls -l stellar-guests
+
+      - name: Upload the guest ELFs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: stellar-guests
+          path: stellar-guests/
+          if-no-files-found: error
+          retention-days: 7
+
+  differential:
+    name: differential-and-negative
+    needs: [guests]
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up environment
+        uses: ./.github/actions/foundry-setup
+
+      - name: Download the guest ELFs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: stellar-guests
+          path: stellar-guests
+
+      - name: Point the harnesses at the downloaded ELFs
+        run: |
+          set -euo pipefail
+          test -s stellar-guests/sp1-stellar-update-client
+          test -s stellar-guests/sp1-stellar-membership
+          echo "SP1_STELLAR_ELF=$PWD/stellar-guests/sp1-stellar-update-client" >> $GITHUB_ENV
+          echo "SP1_STELLAR_MEMBERSHIP_ELF=$PWD/stellar-guests/sp1-stellar-membership" >> $GITHUB_ENV
+
+      - name: The circuit must agree with the native verifier
+        run: |
+          cargo run --release --locked -p sp1-stellar-prover --bin differential
+          cargo run --release --locked -p sp1-stellar-prover --bin differential -- \
+            packages/stellar-light-client/fixtures/testnet-4160279.json
+          cargo run --release --locked -p sp1-stellar-prover --bin membership
+
+      - name: The circuit must reject everything the native verifier rejects
+        run: |
+          cargo run --release --locked -p sp1-stellar-prover --bin negative
+          cargo run --release --locked -p sp1-stellar-prover --bin negative -- \
+            packages/stellar-light-client/fixtures/testnet-4160279.json
+
+  solidity:
+    name: solidity-client
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ibc-solidity
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up environment
+        uses: ./.github/actions/foundry-setup
+
+      - name: Test the Stellar light client and its deploy script
+        run: forge test --match-path 'test/sp1-stellar/*' -vv
+
+      - name: The Solidity fixture must match what the Rust programs emit
+        working-directory: .
+        run: |
+          cargo run --release --locked -p sp1-stellar-prover --bin fixture
+          if ! git diff --quiet ibc-solidity/test/sp1-stellar/fixtures/stellar.json; then
+            echo "::error::test/sp1-stellar/fixtures/stellar.json is stale."
+            echo "Regenerate it: cargo run -p sp1-stellar-prover --bin fixture"
+            git diff ibc-solidity/test/sp1-stellar/fixtures/stellar.json
+            exit 1
+          fi
+          echo "the fixture matches what the Rust programs emit"
+
+      - name: The genesis config must match the pinned verifying keys
+        working-directory: .
+        run: |
+          cargo run --release --locked -p sp1-stellar-prover --bin genesis
+          if ! git diff --quiet ibc-solidity/scripts/deployments/stellar/genesis.json; then
+            echo "::error::scripts/deployments/stellar/genesis.json is stale."
+            echo "Regenerate it: cargo run -p sp1-stellar-prover --bin genesis"
+            git diff ibc-solidity/scripts/deployments/stellar/genesis.json
+            exit 1
+          fi
+          echo "the genesis config matches the pinned verifying keys"
