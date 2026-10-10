@@ -1,0 +1,23 @@
+[package]
+name       = "stellar-proof-api"
+version    = { workspace = true }
+edition    = { workspace = true }
+repository = { workspace = true }
+license    = { workspace = true }
+
+[[bin]]
+name = "stellar-proof-api"
+path = "src/main.rs"
+
+[dependencies]
+proof-api                = { path = "../proof-api" }
+proof-api-core           = { workspace = true, default-features = false }
+proof-api-stellar-to-eth = { workspace = true }
+proof-api-eth-to-stellar = { workspace = true }
+proof-api-forward        = { workspace = true }
+
+tokio      = { workspace = true, default-features = true, features = ["macros", "rt-multi-thread"] }
+clap       = { workspace = true, default-features = true }
+anyhow     = { workspace = true, default-features = true }
+serde_json = { workspace = true, default-features = true }
+tracing    = { workspace = true, default-features = true }

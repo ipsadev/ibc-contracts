@@ -1790,7 +1790,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1801,7 +1801,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2843,7 +2843,7 @@ dependencies = [
  "bitflags 2.11.1",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -3622,6 +3622,28 @@ dependencies = [
  "libc",
  "mach2",
  "parking_lot",
+]
+
+[[package]]
+name = "crate-git-revision"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c521bf1f43d31ed2f73441775ed31935d77901cb3451e44b38a1c1612fcbaf98"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
+name = "crate-git-revision"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54851b5b3f24621804b1cded2820975623c205e3055d2d44031cdb1237339ac8"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]
@@ -4423,13 +4445,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ed25519-dalek"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
+dependencies = [
+ "curve25519-dalek 4.1.3",
+ "ed25519 2.2.3",
+ "serde",
+ "sha2 0.10.9",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
 name = "ed25519-dalek-bip32"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d2be62a4061b872c8c0873ee4fc6f101ce7b889d039f019c5fa2af471a59908"
 dependencies = [
  "derivation-path",
- "ed25519-dalek",
+ "ed25519-dalek 1.0.1",
  "hmac 0.12.1",
  "sha2 0.10.9",
 ]
@@ -4565,8 +4601,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "escape-bytes"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bfcf67fea2815c2fc3b90873fae90957be12ff417335dfadc7f52927feb03b2"
 
 [[package]]
 name = "ethereum-apis"
@@ -4734,6 +4776,12 @@ dependencies = [
  "quote",
  "syn 2.0.117",
 ]
+
+[[package]]
+name = "ethnum"
+version = "1.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
 name = "event-listener"
@@ -6434,6 +6482,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
 
 [[package]]
+name = "ipsa-scp-verifier"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c679738b4bf433bc17885e23887dd4ee0d7076e09aaffcc96a3302d4e6a76d2d"
+dependencies = [
+ "ed25519-dalek 2.2.0",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "stellar-consensus-verifier",
+ "stellar-strkey",
+ "stellar-xdr 27.0.0",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "ipsa-scp-verifier"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "265110a9b27d235bc78a97ba25962cf8dca98cd4316c44df381dc606b7a205db"
+dependencies = [
+ "ed25519-dalek 2.2.0",
+ "flate2",
+ "futures",
+ "hex",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "stellar-consensus-verifier",
+ "stellar-strkey",
+ "stellar-xdr 28.0.0",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "iri-string"
 version = "0.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7078,7 +7164,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7292,7 +7378,7 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "680998035259dcfcafe653688bf2aa6d3e2dc05e98be6ab46afb089dc84f1df8"
 dependencies = [
- "proc-macro-crate 1.3.1",
+ "proc-macro-crate 3.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -8728,6 +8814,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "proof-api-eth-to-stellar"
+version = "0.1.0"
+dependencies = [
+ "alloy 2.0.4",
+ "anyhow",
+ "ethereum-apis 0.1.0",
+ "ethereum-light-client 0.1.0",
+ "ethereum-types 0.1.0",
+ "hex",
+ "ibc-eureka-solidity-types 0.1.0",
+ "proof-api-core",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sp1-ethereum-prover",
+ "stellar-xdr 28.0.0",
+ "tokio",
+ "tonic 0.13.1",
+ "tracing",
+]
+
+[[package]]
+name = "proof-api-forward"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "proof-api-core",
+ "serde",
+ "serde_json",
+ "tonic 0.13.1",
+ "tracing",
+]
+
+[[package]]
 name = "proof-api-lib"
 version = "0.1.0"
 dependencies = [
@@ -8821,6 +8942,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "proof-api-stellar-to-eth"
+version = "0.1.0"
+dependencies = [
+ "alloy 2.0.4",
+ "anyhow",
+ "hex",
+ "ibc-eureka-solidity-types 0.1.0",
+ "ipsa-scp-verifier 2.0.0",
+ "proof-api-core",
+ "prost",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sp1-stellar-prover",
+ "stellar-light-client-solidity-types",
+ "stellar-xdr 28.0.0",
+ "tokio",
+ "tonic 0.13.1",
+ "tracing",
+]
+
+[[package]]
 name = "proptest"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8866,7 +9010,7 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -9653,7 +9797,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9754,7 +9898,7 @@ dependencies = [
  "security-framework 3.7.0",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10866,7 +11010,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11256,7 +11400,7 @@ checksum = "a1feafa1691ea3ae588f99056f4bdd1293212c7ece28243d7da257c443e84753"
 dependencies = [
  "bytemuck",
  "bytemuck_derive",
- "ed25519-dalek",
+ "ed25519-dalek 1.0.1",
  "solana-feature-set",
  "solana-instruction",
  "solana-precompile-error",
@@ -11600,7 +11744,7 @@ version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd3f04aa1a05c535e93e121a95f66e7dcccf57e007282e8255535d24bf1e98bb"
 dependencies = [
- "ed25519-dalek",
+ "ed25519-dalek 1.0.1",
  "ed25519-dalek-bip32",
  "five8",
  "rand 0.7.3",
@@ -12551,7 +12695,7 @@ version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64c8ec8e657aecfc187522fc67495142c12f35e55ddeca8698edbb738b8dbd8c"
 dependencies = [
- "ed25519-dalek",
+ "ed25519-dalek 1.0.1",
  "five8",
  "rand 0.8.6",
  "serde",
@@ -13428,6 +13572,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp1-ethereum-prover"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-rpc-types-eth 2.0.4",
+ "anyhow",
+ "ethereum-apis 0.1.0",
+ "ethereum-light-client 0.1.0",
+ "ethereum-types 0.1.0",
+ "hex",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sp1-sdk 6.1.0",
+ "tokio",
+]
+
+[[package]]
 name = "sp1-hypercube"
 version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14146,6 +14310,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp1-stellar-prover"
+version = "0.1.0"
+dependencies = [
+ "alloy-sol-types",
+ "anyhow",
+ "hex",
+ "ipsa-scp-verifier 1.0.0",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sp1-sdk 6.1.0",
+ "stellar-light-client-membership",
+ "stellar-light-client-solidity-types",
+ "stellar-light-client-update-client",
+]
+
+[[package]]
 name = "sp1-verifier"
 version = "5.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14601,6 +14782,120 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
+name = "stellar-consensus-verifier"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47635ac44720787812ea5a1012e7e7b358ea4f48866c4807da1007f684595390"
+dependencies = [
+ "ed25519-dalek 2.2.0",
+ "sha2 0.10.9",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "stellar-light-client-membership"
+version = "0.1.0"
+dependencies = [
+ "alloy-sol-types",
+ "hex",
+ "ipsa-scp-verifier 1.0.0",
+ "serde_json",
+ "sha2 0.10.9",
+ "stellar-light-client-membership",
+ "stellar-light-client-solidity-types",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "stellar-light-client-solidity-types"
+version = "0.1.0"
+dependencies = [
+ "alloy-sol-types",
+]
+
+[[package]]
+name = "stellar-light-client-uc-and-membership"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "serde_json",
+ "sha2 0.10.9",
+ "stellar-light-client-membership",
+ "stellar-light-client-solidity-types",
+ "stellar-light-client-update-client",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "stellar-light-client-update-client"
+version = "0.1.0"
+dependencies = [
+ "alloy-sol-types",
+ "hex",
+ "ipsa-scp-verifier 1.0.0",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "stellar-light-client-solidity-types",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "stellar-proof-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "proof-api",
+ "proof-api-core",
+ "proof-api-eth-to-stellar",
+ "proof-api-forward",
+ "proof-api-stellar-to-eth",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "stellar-strkey"
+version = "0.0.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee1832fb50c651ad10f734aaf5d31ca5acdfb197a6ecda64d93fcdb8885af913"
+dependencies = [
+ "crate-git-revision 0.0.6",
+ "data-encoding",
+]
+
+[[package]]
+name = "stellar-xdr"
+version = "27.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05ff843326969bdf1ef673dcdba94c08f4a3c8f1e58d6e6ef39b1bd4f749179a"
+dependencies = [
+ "crate-git-revision 0.0.6",
+ "escape-bytes",
+ "ethnum",
+ "hex",
+ "sha2 0.10.9",
+ "stellar-strkey",
+]
+
+[[package]]
+name = "stellar-xdr"
+version = "28.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f93d09ff8b9f919b084f664003c4c546ac66a76affd5429460dbe29f4b326f8e"
+dependencies = [
+ "base64 0.22.1",
+ "crate-git-revision 0.0.9",
+ "escape-bytes",
+ "ethnum",
+ "hex",
+ "sha2 0.10.9",
+ "stellar-strkey",
+]
+
+[[package]]
 name = "strength_reduce"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14857,7 +15152,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -16323,7 +16618,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

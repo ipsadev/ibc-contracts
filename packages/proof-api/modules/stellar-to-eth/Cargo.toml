@@ -1,0 +1,30 @@
+[package]
+name       = "proof-api-stellar-to-eth"
+version    = { workspace = true }
+edition    = { workspace = true }
+repository = { workspace = true }
+license    = { workspace = true }
+
+[dependencies]
+proof-api-core                      = { workspace = true, default-features = false }
+ibc-eureka-solidity-types           = { workspace = true, features = ["rpc"] }
+stellar-light-client-solidity-types = { workspace = true }
+sp1-stellar-prover                  = { workspace = true }
+ipsa-scp-exporter                   = { package = "ipsa-scp-verifier", version = "2.0.0", default-features = false, features = ["io"] }
+
+stellar-xdr = { version = "28.0.0", default-features = false, features = ["std", "base64"] }
+
+alloy      = { workspace = true, features = ["full", "reqwest-rustls-tls"] }
+reqwest    = { workspace = true, features = ["json", "rustls-tls"] }
+serde      = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["std"] }
+sha2       = { workspace = true, features = ["std"] }
+hex        = { workspace = true, features = ["std"] }
+anyhow     = { workspace = true, features = ["std"] }
+tonic      = { workspace = true, default-features = true }
+prost      = { workspace = true, features = ["derive", "std"] }
+tokio      = { workspace = true, features = ["time", "rt"] }
+tracing    = { workspace = true, default-features = true }
+
+[dev-dependencies]
+serde_json = { workspace = true, features = ["std"] }

@@ -1,0 +1,15 @@
+[package]
+name       = "proof-api-forward"
+version    = { workspace = true }
+edition    = { workspace = true }
+repository = { workspace = true }
+license    = { workspace = true }
+
+[dependencies]
+proof-api-core = { workspace = true, default-features = false }
+
+serde      = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["std"] }
+anyhow     = { workspace = true, features = ["std"] }
+tonic      = { workspace = true, default-features = true }
+tracing    = { workspace = true, default-features = true }

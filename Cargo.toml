@@ -14,6 +14,12 @@ members = [
     "packages/tendermint-light-client/misbehaviour",
     "packages/tendermint-light-client/uc-and-membership",
     "packages/tendermint-light-client/solana",
+    "packages/stellar-light-client/solidity-types",
+    "packages/stellar-light-client/update-client",
+    "packages/stellar-light-client/membership",
+    "packages/stellar-light-client/uc-and-membership",
+    "packages/sp1-stellar-prover",
+    "packages/sp1-ethereum-prover",
     "packages/proof-api/lib",
     "packages/proof-api/core",
     "packages/proof-api/modules/eth-to-cosmos",
@@ -26,10 +32,14 @@ members = [
     "packages/proof-api/modules/cosmos-to-solana",
     "packages/proof-api/modules/eth-to-solana",
     "packages/proof-api/modules/solana-to-eth",
+    "packages/proof-api/modules/stellar-to-eth",
+    "packages/proof-api/modules/eth-to-stellar",
+    "packages/proof-api/modules/forward",
     "packages/sp1-ics07-tendermint-prover",
 
     # Programs (binaries)
     "programs/proof-api",
+    "programs/stellar-proof-api",
     "ibc-solidity/programs/operator",
     # NOTE: `ibc-solidity/programs/cw-ics08-wasm-eth` is intentionally NOT a member here.
     # It is its own workspace (with its own Cargo.lock) so its dependencies can be pinned
@@ -55,6 +65,11 @@ keywords   = ["cosmos", "ibc", "sp1", "tendermint", "ethereum", "bridge", "solid
 
 [workspace.dependencies]
 ibc-eureka-solidity-types               = { path = "packages/solidity", default-features = false }
+stellar-light-client-solidity-types     = { path = "packages/stellar-light-client/solidity-types", default-features = false }
+stellar-light-client-update-client      = { path = "packages/stellar-light-client/update-client", default-features = false }
+stellar-light-client-membership         = { path = "packages/stellar-light-client/membership", default-features = false }
+stellar-light-client-uc-and-membership  = { path = "packages/stellar-light-client/uc-and-membership", default-features = false }
+ipsa-scp-verifier                       = { version = "1.0.0", default-features = false }
 proof-api-lib                  = { path = "packages/proof-api/lib", default-features = false }
 proof-api-core                 = { path = "packages/proof-api/core", default-features = false }
 proof-api-eth-to-cosmos        = { path = "packages/proof-api/modules/eth-to-cosmos", default-features = false }
@@ -67,6 +82,10 @@ proof-api-solana-to-cosmos     = { path = "packages/proof-api/modules/solana-to-
 proof-api-cosmos-to-solana     = { path = "packages/proof-api/modules/cosmos-to-solana", default-features = false }
 proof-api-eth-to-solana        = { path = "packages/proof-api/modules/eth-to-solana", default-features = false }
 proof-api-solana-to-eth        = { path = "packages/proof-api/modules/solana-to-eth", default-features = false }
+proof-api-stellar-to-eth       = { path = "packages/proof-api/modules/stellar-to-eth", default-features = false }
+proof-api-eth-to-stellar       = { path = "packages/proof-api/modules/eth-to-stellar", default-features = false }
+proof-api-forward              = { path = "packages/proof-api/modules/forward", default-features = false }
+sp1-stellar-prover             = { path = "packages/sp1-stellar-prover" }
 ibc-eureka-utils                        = { path = "packages/utils", default-features = false }
 ibc-eureka-constrained-types            = { path = "packages/constrained_types", default-features = false }
 sp1-ics07-tendermint-prover             = { path = "packages/sp1-ics07-tendermint-prover", default-features = false }
