@@ -11,6 +11,7 @@ use proof_api_core::{
     api::{self, proof_api_service_server::ProofApiService},
     modules::ProofApiModule,
 };
+use proof_api_history::{NetworkRequest, ProofEntry, ProofHistory};
 use serde::{Deserialize, Serialize};
 use sp1_ethereum_prover::{
     membership_wire,
@@ -77,6 +78,65 @@ struct EthToStellarService {
     programs: Arc<Programs>,
     chain_id: u64,
     mode: Mode,
+    history: ProofHistory,
+}
+
+struct ProofContext {
+    src_chain: String,
+    dst_chain: String,
+    kind: &'static str,
+    tx_hash: String,
+    sequences: Vec<u64>,
+    trusted_height: u64,
+    target_height: u64,
+}
+
+impl ProofContext {
+    fn entry(&self, step: u32, program: &str, status: &str) -> ProofEntry {
+        ProofEntry {
+            module: "eth_to_stellar".to_string(),
+            src_chain: self.src_chain.clone(),
+            dst_chain: self.dst_chain.clone(),
+            kind: self.kind.to_string(),
+            tx_hash: self.tx_hash.clone(),
+            sequences: self.sequences.clone(),
+            step,
+            program: program.to_string(),
+            prover: "network".to_string(),
+            status: status.to_string(),
+            error: None,
+            vkey: None,
+            trusted_height: Some(self.trusted_height),
+            target_height: Some(self.target_height),
+            public_values: None,
+            proof: None,
+            request: None,
+        }
+    }
+
+    fn outcome(&self, step: u32, program: &str, outcome: &Outcome) -> Option<ProofEntry> {
+        let Outcome::Proved(proof) = outcome else {
+            return None;
+        };
+
+        Some(ProofEntry {
+            vkey: Some(proof.vkey),
+            public_values: Some(proof.public_values.clone()),
+            proof: Some(proof.proof.clone()),
+            request: Some(NetworkRequest::from_sdk(
+                proof.request_id,
+                proof.request.as_deref(),
+            )),
+            ..self.entry(step, program, "fulfilled")
+        })
+    }
+
+    fn failed(&self, error: &anyhow::Error) -> ProofEntry {
+        ProofEntry {
+            error: Some(format!("{error:#}")),
+            ..self.entry(0, "update_client and membership", "failed")
+        }
+    }
 }
 
 fn contract_id(strkey: &str) -> Result<[u8; 32]> {
@@ -204,7 +264,14 @@ impl EthToStellarService {
         )
         .await?;
 
+        let history = ProofHistory::from_env();
+
+        if let Err(error) = history.prepare().await {
+            tracing::warn!(%error, "the proof history is unavailable; proofs are not recorded");
+        }
+
         Ok(Self {
+            history,
             beacon,
             evm,
             soroban: SorobanRpc::new(configuration.soroban_rpc_url),
@@ -433,6 +500,19 @@ impl EthToStellarService {
         let proving_path = path.clone();
         let proving_value = value.clone();
 
+        let context = ProofContext {
+            src_chain: request.src_chain.clone(),
+            dst_chain: request.dst_chain.clone(),
+            kind: match found.relayable {
+                Relayable::Receive(..) => "recv",
+                Relayable::Acknowledge(..) => "ack",
+            },
+            tx_hash: transaction.to_string(),
+            sequences: vec![packet.sequence],
+            trusted_height: trusted_slot,
+            target_height: proof_slot,
+        };
+
         let proven = tokio::task::spawn_blocking(move || {
             prove(
                 &programs,
@@ -448,7 +528,30 @@ impl EthToStellarService {
             )
         })
         .await
-        .map_err(|error| anyhow!("proving panicked: {error}"))??;
+        .map_err(|error| anyhow!("proving panicked: {error}"))?;
+
+        let proven = match proven {
+            Ok(proven) => proven,
+            Err(error) => {
+                if self.mode == Mode::Network {
+                    self.history.record(&context.failed(&error)).await;
+                }
+
+                return Err(error);
+            }
+        };
+
+        let steps = proven.updates.len() as u32;
+
+        for (step, update) in proven.updates.iter().enumerate() {
+            if let Some(entry) = context.outcome(step as u32, "update_client", update) {
+                self.history.record(&entry).await;
+            }
+        }
+
+        if let Some(entry) = context.outcome(steps, "membership", &proven.membership) {
+            self.history.record(&entry).await;
+        }
 
         if self.mode == Mode::Execute {
             tracing::info!(

@@ -35,6 +35,7 @@ members = [
     "packages/proof-api/modules/stellar-to-eth",
     "packages/proof-api/modules/eth-to-stellar",
     "packages/proof-api/modules/forward",
+    "packages/proof-api/history",
     "packages/sp1-ics07-tendermint-prover",
 
     # Programs (binaries)
@@ -85,6 +86,7 @@ proof-api-solana-to-eth        = { path = "packages/proof-api/modules/solana-to-
 proof-api-stellar-to-eth       = { path = "packages/proof-api/modules/stellar-to-eth", default-features = false }
 proof-api-eth-to-stellar       = { path = "packages/proof-api/modules/eth-to-stellar", default-features = false }
 proof-api-forward              = { path = "packages/proof-api/modules/forward", default-features = false }
+proof-api-history              = { path = "packages/proof-api/history" }
 sp1-stellar-prover             = { path = "packages/sp1-stellar-prover" }
 ibc-eureka-utils                        = { path = "packages/utils", default-features = false }
 ibc-eureka-constrained-types            = { path = "packages/constrained_types", default-features = false }

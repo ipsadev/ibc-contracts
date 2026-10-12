@@ -7,6 +7,8 @@ license    = { workspace = true }
 
 [dependencies]
 proof-api-core = { workspace = true, default-features = false }
+proof-api-history = { workspace = true }
+hex            = { workspace = true, features = ["std"] }
 
 serde      = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["std"] }

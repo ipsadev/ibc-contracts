@@ -17,7 +17,7 @@ COPY ibc-solana/Cargo.toml ibc-solana/Cargo.toml
 COPY ibc-solana/packages ibc-solana/packages
 COPY proto proto
 
-RUN cargo build --bin stellar-proof-api --release --locked
+RUN cargo build --bin stellar-proof-api --bin proof-history-backfill --release --locked
 
 FROM debian:bookworm-slim AS certs
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
@@ -35,7 +35,8 @@ ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 WORKDIR /app
 COPY --from=builder /app/target/release/stellar-proof-api /usr/local/bin/stellar-proof-api
+COPY --from=builder /app/target/release/proof-history-backfill /usr/local/bin/proof-history-backfill
 COPY --from=artifacts . /app/
 
 EXPOSE 3100
-ENTRYPOINT ["/usr/local/bin/stellar-proof-api", "start", "--config", "/app/proof-api.json"]
+CMD ["/usr/local/bin/stellar-proof-api", "start", "--config", "/app/proof-api.json"]

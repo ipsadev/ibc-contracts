@@ -24,13 +24,15 @@ use proof_api_core::{
     api::{self, proof_api_service_server::ProofApiService},
     modules::ProofApiModule,
 };
+use proof_api_history::{NetworkRequest, ProofEntry, ProofHistory};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sp1_stellar_prover::{
     consensus_state_of, decode_contract_id,
     relay::{
         execute_membership_on_cpu, execute_on_cpu, prove_membership_on_network, prove_on_network,
-        run_membership_natively, run_natively, verifying_key, Programs, RelayProofs, Trusted,
+        run_membership_natively, run_natively, verifying_key, Programs, Proof, RelayProofs,
+        Trusted,
     },
 };
 use stellar_light_client_solidity_types::{
@@ -109,6 +111,61 @@ struct StellarToEthService {
     prover: ProverMode,
     client_creation: Option<ClientCreation>,
     gateway: Option<String>,
+    history: ProofHistory,
+}
+
+struct ProofContext {
+    src_chain: String,
+    dst_chain: String,
+    kind: &'static str,
+    tx_hash: String,
+    sequences: Vec<u64>,
+    trusted_height: u64,
+    target_height: u64,
+}
+
+impl ProofContext {
+    fn entry(&self, step: u32, program: &str, status: &str) -> ProofEntry {
+        ProofEntry {
+            module: "stellar_to_eth".to_string(),
+            src_chain: self.src_chain.clone(),
+            dst_chain: self.dst_chain.clone(),
+            kind: self.kind.to_string(),
+            tx_hash: self.tx_hash.clone(),
+            sequences: self.sequences.clone(),
+            step,
+            program: program.to_string(),
+            prover: "network".to_string(),
+            status: status.to_string(),
+            error: None,
+            vkey: None,
+            trusted_height: Some(self.trusted_height),
+            target_height: Some(self.target_height),
+            public_values: None,
+            proof: None,
+            request: None,
+        }
+    }
+
+    fn proved(&self, step: u32, program: &str, proof: &Proof) -> ProofEntry {
+        ProofEntry {
+            vkey: Some(proof.vkey),
+            public_values: Some(proof.public_values.clone()),
+            proof: Some(proof.proof.clone()),
+            request: Some(NetworkRequest::from_sdk(
+                proof.request_id,
+                proof.request.as_deref(),
+            )),
+            ..self.entry(step, program, "fulfilled")
+        }
+    }
+
+    fn failed(&self, program: &str, error: &anyhow::Error) -> ProofEntry {
+        ProofEntry {
+            error: Some(format!("{error:#}")),
+            ..self.entry(0, program, "failed")
+        }
+    }
 }
 
 enum Relayable {
@@ -357,6 +414,12 @@ impl StellarToEthService {
             Duration::from_secs(configuration.checkpoint_timeout_seconds),
         )?;
 
+        let history = ProofHistory::from_env();
+
+        if let Err(error) = history.prepare().await {
+            tracing::warn!(%error, "the proof history is unavailable; proofs are not recorded");
+        }
+
         Ok(Self {
             soroban: SorobanRpc::new(configuration.soroban_rpc_url),
             archive,
@@ -368,6 +431,7 @@ impl StellarToEthService {
             prover: configuration.prover,
             client_creation: configuration.client_creation,
             gateway: configuration.gateway_grpc_address,
+            history,
         })
     }
 
@@ -513,6 +577,7 @@ impl StellarToEthService {
         item: Relayable,
         transaction: &soroban::Transaction,
         executed: &soroban::Executed,
+        context: &ProofContext,
     ) -> Result<Vec<u8>> {
         let ledger = u64::from(transaction.ledger);
         let stored = self.evm.consensus_hash(client, ledger).await.map_err(|_| {
@@ -586,13 +651,27 @@ impl StellarToEthService {
             return Ok(Vec::new());
         }
 
-        let membership = tokio::task::spawn_blocking(move || {
+        let membership = match tokio::task::spawn_blocking(move || {
             let native = run_membership_natively(&fixture, &stored_state, router)?;
 
             prove_membership_on_network(native, &programs)
         })
         .await
-        .map_err(|error| anyhow!("proving panicked: {error}"))??;
+        .map_err(|error| anyhow!("proving panicked: {error}"))?
+        {
+            Ok(membership) => membership,
+            Err(error) => {
+                self.history
+                    .record(&context.failed("membership", &error))
+                    .await;
+
+                return Err(error);
+            }
+        };
+
+        self.history
+            .record(&context.proved(0, "membership", &membership))
+            .await;
 
         Ok(multicallCall {
             data: vec![membership_call(item, &membership, consensus_state, ledger).into()],
@@ -631,6 +710,19 @@ impl StellarToEthService {
             "found the packet to relay"
         );
 
+        let mut context = ProofContext {
+            src_chain: request.src_chain.clone(),
+            dst_chain: request.dst_chain.clone(),
+            kind: match item {
+                Relayable::Receive(..) => "recv",
+                Relayable::Acknowledge(..) => "ack",
+            },
+            tx_hash: hash.to_string(),
+            sequences: vec![item.packet().sequence],
+            trusted_height: 0,
+            target_height: u64::from(transaction.ledger),
+        };
+
         self.refuse_settled(&item).await?;
 
         let client = self.evm.client(&request.dst_client_id).await?;
@@ -647,9 +739,18 @@ impl StellarToEthService {
 
         let trusted_height = client_state.latestHeight.revisionHeight;
 
+        context.trusted_height = trusted_height;
+
         if u64::from(transaction.ledger) <= trusted_height {
             return self
-                .relay_at_stored_height(client, trusted_height, item, &transaction, &executed)
+                .relay_at_stored_height(
+                    client,
+                    trusted_height,
+                    item,
+                    &transaction,
+                    &executed,
+                    &context,
+                )
                 .await;
         }
 
@@ -725,13 +826,30 @@ impl StellarToEthService {
             "proving on the Succinct network"
         );
 
-        let proofs = tokio::task::spawn_blocking(move || {
+        let proofs = match tokio::task::spawn_blocking(move || {
             let native = run_natively(&fixture, &trusted, router, now_in_nanoseconds())?;
 
             prove_on_network(native, &programs)
         })
         .await
-        .map_err(|error| anyhow!("proving panicked: {error}"))??;
+        .map_err(|error| anyhow!("proving panicked: {error}"))?
+        {
+            Ok(proofs) => proofs,
+            Err(error) => {
+                self.history
+                    .record(&context.failed("update_client and membership", &error))
+                    .await;
+
+                return Err(error);
+            }
+        };
+
+        self.history
+            .record(&context.proved(0, "update_client", &proofs.update))
+            .await;
+        self.history
+            .record(&context.proved(1, "membership", &proofs.membership))
+            .await;
 
         let calls = router_calls(
             request.dst_client_id,
