@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use sp1_sdk::{
     blocking::{Elf, ProveRequest, Prover, ProverClient, SP1Stdin},
+    network::proto::types::ProofRequest,
     HashableKey, ProvingKey, SP1ProofMode,
 };
 
@@ -14,6 +15,9 @@ pub struct Proof {
     pub vkey: [u8; 32],
     pub public_values: Vec<u8>,
     pub proof: Vec<u8>,
+    pub cycles: u64,
+    pub request_id: [u8; 32],
+    pub request: Option<Box<ProofRequest>>,
 }
 
 pub enum Outcome {
@@ -99,11 +103,15 @@ pub fn run(elf: &[u8], stdin: SP1Stdin, mode: Mode, name: &str) -> Result<Outcom
         .map_err(|error| anyhow!("the {name} ELF could not be set up: {error}"))?;
     let verifying_key = proving_key.verifying_key().clone();
 
-    let proof = network
+    let request_id = network
         .prove(&proving_key, stdin)
         .mode(SP1ProofMode::Groth16)
-        .run()
-        .map_err(|error| anyhow!("proving {name} failed: {error}"))?;
+        .request()
+        .map_err(|error| anyhow!("requesting the {name} proof failed: {error}"))?;
+
+    let proof = network
+        .wait_proof(request_id, None, None)
+        .map_err(|error| anyhow!("proving {name} failed (request {request_id}): {error}"))?;
 
     network
         .verify(&proof, &verifying_key, None)
@@ -120,10 +128,19 @@ pub fn run(elf: &[u8], stdin: SP1Stdin, mode: Mode, name: &str) -> Result<Outcom
         .try_into()
         .map_err(|_| anyhow!("the verifying key is not 32 bytes"))?;
 
+    let request = network
+        .get_proof_request(request_id)
+        .ok()
+        .flatten()
+        .map(Box::new);
+
     Ok(Outcome::Proved(Proof {
         vkey,
         public_values: proof.public_values.as_slice().to_vec(),
         proof: proof.bytes(),
+        cycles: report.total_instruction_count(),
+        request_id: request_id.0,
+        request,
     }))
 }
 

@@ -3,7 +3,8 @@
 use alloy_sol_types::SolValue;
 use anyhow::{anyhow, Context, Result};
 use sp1_sdk::{
-    blocking::{Elf, ProveRequest, Prover, ProverClient, SP1Stdin},
+    blocking::{Elf, NetworkProver, ProveRequest, Prover, ProverClient, SP1Stdin},
+    network::proto::types::ProofRequest,
     HashableKey, ProvingKey, SP1ProofMode,
 };
 use stellar_light_client_membership::membership;
@@ -26,6 +27,8 @@ pub struct Proof {
     pub vkey: [u8; 32],
     pub public_values: Vec<u8>,
     pub proof: Vec<u8>,
+    pub request_id: [u8; 32],
+    pub request: Option<Box<ProofRequest>>,
 }
 
 pub struct Native {
@@ -150,25 +153,32 @@ pub fn prove_on_network(native: Native, programs: &Programs) -> Result<RelayProo
     })
 }
 
-fn prove_one<P>(client: &P, elf: &[u8], stdin: SP1Stdin, name: &str) -> Result<Proof>
-where
-    P: Prover,
-{
+fn prove_one(client: &NetworkProver, elf: &[u8], stdin: SP1Stdin, name: &str) -> Result<Proof> {
     let proving_key = client
         .setup(Elf::from(elf.to_vec()))
         .map_err(|error| anyhow!("the {name} ELF could not be set up: {error}"))?;
 
     let verifying_key = proving_key.verifying_key().clone();
 
-    let proof = client
+    let request_id = client
         .prove(&proving_key, stdin)
         .mode(SP1ProofMode::Groth16)
-        .run()
-        .map_err(|error| anyhow!("proving {name} failed: {error}"))?;
+        .request()
+        .map_err(|error| anyhow!("requesting the {name} proof failed: {error}"))?;
+
+    let proof = client
+        .wait_proof(request_id, None, None)
+        .map_err(|error| anyhow!("proving {name} failed (request {request_id}): {error}"))?;
 
     client
         .verify(&proof, &verifying_key, None)
         .map_err(|error| anyhow!("the {name} proof did not verify: {error}"))?;
+
+    let request = client
+        .get_proof_request(request_id)
+        .ok()
+        .flatten()
+        .map(Box::new);
 
     let vkey = hex::decode(verifying_key.bytes32().trim_start_matches("0x"))
         .context("the verifying key is not hex")?
@@ -179,6 +189,8 @@ where
         vkey,
         public_values: proof.public_values.as_slice().to_vec(),
         proof: proof.bytes(),
+        request_id: request_id.0,
+        request,
     })
 }
 
@@ -228,10 +240,15 @@ pub fn verifying_key(elf: &[u8]) -> Result<[u8; 32]> {
         .setup(Elf::from(elf.to_vec()))
         .map_err(|error| anyhow!("the ELF could not be set up: {error}"))?;
 
-    hex::decode(proving_key.verifying_key().bytes32().trim_start_matches("0x"))
-        .context("the verifying key is not hex")?
-        .try_into()
-        .map_err(|_| anyhow!("the verifying key is not 32 bytes"))
+    hex::decode(
+        proving_key
+            .verifying_key()
+            .bytes32()
+            .trim_start_matches("0x"),
+    )
+    .context("the verifying key is not hex")?
+    .try_into()
+    .map_err(|_| anyhow!("the verifying key is not 32 bytes"))
 }
 
 pub struct MembershipOnly {
@@ -301,7 +318,9 @@ pub fn prove_membership_on_network(native: MembershipOnly, programs: &Programs) 
     let proof = prove_one(&client, &programs.membership, native.stdin, "membership")?;
 
     if proof.public_values != native.membership.abi_encode() {
-        return Err(anyhow!("the membership proof committed values the native run did not"));
+        return Err(anyhow!(
+            "the membership proof committed values the native run did not"
+        ));
     }
 
     Ok(proof)
