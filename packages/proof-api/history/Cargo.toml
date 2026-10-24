@@ -1,0 +1,30 @@
+[package]
+name       = "proof-api-history"
+version    = { workspace = true }
+edition    = { workspace = true }
+repository = { workspace = true }
+license    = { workspace = true }
+
+[dependencies]
+anyhow    = { workspace = true, default-features = true }
+hex       = { workspace = true, features = ["std"] }
+sp1-sdk   = { workspace = true, features = ["blocking", "network"] }
+tokio     = { workspace = true, features = ["time"] }
+tracing   = { workspace = true, default-features = true }
+
+rustls                = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls-pki-types      = { version = "1.14", features = ["std"] }
+tokio-postgres        = "0.7"
+tokio-postgres-rustls = "0.14"
+webpki-roots          = "1"
+
+serde      = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["std"] }
+
+[[bin]]
+name = "proof-history-backfill"
+path = "src/bin/backfill.rs"
+
+[dev-dependencies]
+tokio          = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio-postgres = "0.7"

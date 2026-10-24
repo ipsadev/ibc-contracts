@@ -1,0 +1,64 @@
+{
+  "server": {
+    "address": "0.0.0.0",
+    "port": 3100
+  },
+  "modules": [
+    {
+      "name": "stellar_to_eth",
+      "src_chain": "stellar-testnet",
+      "dst_chain": "11155111",
+      "config": {
+        "soroban_rpc_url": "https://soroban-testnet.stellar.org",
+        "stellar_network": "testnet",
+        "soroban_router": "CBA7QRXNLV2VGXNB7JALC4ZRPD4Q3SFAJRXFS3NTUJBFLLIDT6AEECSS",
+        "eth_rpc_url": "https://ethereum-sepolia-rpc.publicnode.com",
+        "ics26_address": "0x3f09B9D0E8453C91FBA256F8e2A39A7200D7604B",
+        "sp1_programs": {
+          "update_client": "ibc-solidity/programs/sp1-stellar-programs/update-client/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/sp1-stellar-update-client",
+          "membership": "ibc-solidity/programs/sp1-stellar-programs/membership/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/sp1-stellar-membership"
+        },
+        "prover": "network",
+        "client_creation": {
+          "artifact": "ibc-solidity/out/SP1ICSStellar.sol/SP1ICSStellar.json",
+          "sp1_verifier": "0x397A5f7f3dBd538f23DE225B51f532c34448dA9B",
+          "uc_and_membership": "ibc-solidity/programs/sp1-stellar-programs/uc-and-membership/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/sp1-stellar-uc-and-membership"
+        },
+        "gateway_grpc_address": "http://127.0.0.1:50052"
+      }
+    },
+    {
+      "name": "eth_to_stellar",
+      "src_chain": "11155111",
+      "dst_chain": "stellar-testnet",
+      "config": {
+        "beacon_api_url": "https://lodestar-sepolia.chainsafe.io",
+        "eth_rpc_url": "https://ethereum-sepolia-rpc.publicnode.com",
+        "ics26_address": "0x3f09B9D0E8453C91FBA256F8e2A39A7200D7604B",
+        "soroban_rpc_url": "https://soroban-testnet.stellar.org",
+        "soroban_router": "CBA7QRXNLV2VGXNB7JALC4ZRPD4Q3SFAJRXFS3NTUJBFLLIDT6AEECSS",
+        "sp1_programs": {
+          "update_client": "programs/sp1-ethereum-programs/update-client/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/sp1-ethereum-update-client",
+          "membership": "programs/sp1-ethereum-programs/membership/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/sp1-ethereum-membership"
+        },
+        "prover": "network"
+      }
+    },
+    {
+      "name": "forward",
+      "src_chain": "stellar-testnet",
+      "dst_chain": "simd-1",
+      "config": {
+        "target": "http://127.0.0.1:50052"
+      }
+    },
+    {
+      "name": "forward",
+      "src_chain": "simd-1",
+      "dst_chain": "stellar-testnet",
+      "config": {
+        "target": "http://127.0.0.1:50052"
+      }
+    }
+  ]
+}

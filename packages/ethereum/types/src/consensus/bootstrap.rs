@@ -3,14 +3,24 @@
 //! This module defines types related to the bootstrap endpoint of the Beacon API.
 
 use alloy_primitives::B256;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use super::{
-    light_client_header::LightClientHeader,
-    merkle::{floorlog2, CURRENT_SYNC_COMMITTEE_GINDEX_ELECTRA},
+    light_client_header::{fork_branch, LightClientHeader},
+    merkle::{
+        floorlog2, CURRENT_SYNC_COMMITTEE_GINDEX_ELECTRA, CURRENT_SYNC_COMMITTEE_GINDEX_GLOAS,
+    },
     sync_committee::SyncCommittee,
 };
+
+fork_branch!(
+    /// The current sync committee branch: depth 6 from electra up to fulu, 11 from gloas on
+    CurrentSyncCommitteeBranch,
+    CURRENT_SYNC_COMMITTEE_GINDEX_ELECTRA,
+    CURRENT_SYNC_COMMITTEE_GINDEX_GLOAS
+);
 
 /// The light client bootstrap
 #[serde_as]
@@ -22,5 +32,5 @@ pub struct LightClientBootstrap {
     /// The current sync committee
     pub current_sync_committee: SyncCommittee,
     /// The branch of the current sync committee
-    pub current_sync_committee_branch: [B256; floorlog2(CURRENT_SYNC_COMMITTEE_GINDEX_ELECTRA)],
+    pub current_sync_committee_branch: CurrentSyncCommitteeBranch,
 }

@@ -1,0 +1,20 @@
+[package]
+name        = "stellar-light-client-uc-and-membership"
+description = "Verify a Stellar header and a packet in it, in one proof"
+version     = { workspace = true }
+edition     = { workspace = true }
+repository  = { workspace = true }
+license     = { workspace = true }
+
+[dependencies]
+stellar-light-client-membership     = { workspace = true }
+stellar-light-client-solidity-types = { workspace = true }
+stellar-light-client-update-client  = { workspace = true }
+
+thiserror = { workspace = true }
+
+[dev-dependencies]
+stellar-light-client-membership = { workspace = true, features = ["scenario"] }
+hex        = { workspace = true }
+sha2       = { workspace = true }
+serde_json = { workspace = true }

@@ -177,6 +177,27 @@ pub enum EthereumIBCError {
     #[error("storage roots are not conflicting: {0} == {0}")]
     MisbehaviourStorageRootsMatch(B256),
 
+    #[error("execution block hashes are not conflicting: {0} == {0}")]
+    MisbehaviourExecutionBlockHashesMatch(B256),
+
+    #[error("a header from gloas on needs the execution header it commits to")]
+    MissingExecutionHeader,
+
+    #[error("execution header hashes to {found}, the light client header commits to {expected}")]
+    ExecutionHeaderHashMismatch { expected: B256, found: B256 },
+
+    #[error("execution header is not a well formed RLP execution block header")]
+    ExecutionHeaderDecode,
+
+    #[error("light client header at epoch {epoch} is not in the shape of its fork")]
+    LightClientHeaderForkMismatch { epoch: u64 },
+
+    #[error("merkle branch of length {length} is deeper than gindex {gindex} allows")]
+    MerkleBranchTooDeep { length: usize, gindex: u64 },
+
+    #[error("execution timestamp went backwards: trusted {trusted}, new {new}")]
+    ExecutionTimestampDecreased { trusted: u64, new: u64 },
+
     #[error(
         "update must be against a previous consensus state: \
         stored consensus state slot: {consensus_state_slot}, \

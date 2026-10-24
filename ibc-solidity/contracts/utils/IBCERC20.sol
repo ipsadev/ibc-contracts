@@ -4,8 +4,11 @@ pragma solidity ^0.8.28;
 import { IIBCERC20 } from "../interfaces/IIBCERC20.sol";
 import { IMintableAndBurnable } from "../interfaces/IMintableAndBurnable.sol";
 import { IIBCERC20Errors } from "../errors/IIBCERC20Errors.sol";
+import { IBCRolesLib } from "./IBCRolesLib.sol";
 
 import { ERC20Upgradeable } from "@openzeppelin-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import { IAccessManaged } from "@openzeppelin-contracts/access/manager/IAccessManaged.sol";
+import { IAccessManager } from "@openzeppelin-contracts/access/manager/IAccessManager.sol";
 
 /// @title IBCERC20 Contract
 /// @notice This contract is the default ERC20 implementation for new IBC tokens.
@@ -17,10 +20,10 @@ contract IBCERC20 is IIBCERC20Errors, IIBCERC20, ERC20Upgradeable {
     /// @param _fullDenomPath The full IBC denom path for this token
     /// @param _escrow The escrow contract address
     /// @param _ics20 The ICS20 contract address, can burn and mint tokens
-    /// @param _customMetadataSet If the custom metadata has been set. Can no longer be changed.
-    /// @param _customDecimals The decimals for the custom token metadata. Can no longer be changed.
-    /// @param _customName The name for the custom token metadata. Can no longer be changed.
-    /// @param _customSymbol The symbol for the custom token metadata. Can no longer be changed.
+    /// @param _customMetadataSet If the custom metadata has been set. Set by `setMetadata`.
+    /// @param _customDecimals The decimals for the custom token metadata. Set by `setMetadata`.
+    /// @param _customName The name for the custom token metadata. Set by `setMetadata`.
+    /// @param _customSymbol The symbol for the custom token metadata. Set by `setMetadata`.
     struct IBCERC20Storage {
         string _fullDenomPath;
         address _escrow;
@@ -82,6 +85,19 @@ contract IBCERC20 is IIBCERC20Errors, IIBCERC20, ERC20Upgradeable {
     /// @inheritdoc IIBCERC20
     function ics20() external view returns (address) {
         return _getIBCERC20Storage()._ics20;
+    }
+
+    /// @inheritdoc IIBCERC20
+    function setMetadata(uint8 customDecimals, string calldata customName, string calldata customSymbol) external {
+        IBCERC20Storage storage $ = _getIBCERC20Storage();
+        address authority = IAccessManaged($._ics20).authority();
+        (bool isCustomizer,) = IAccessManager(authority).hasRole(IBCRolesLib.ERC20_CUSTOMIZER_ROLE, _msgSender());
+        require(isCustomizer, IBCERC20Unauthorized(_msgSender()));
+
+        $._customMetadataSet = true;
+        $._customDecimals = customDecimals;
+        $._customName = customName;
+        $._customSymbol = customSymbol;
     }
 
     /// @inheritdoc IMintableAndBurnable

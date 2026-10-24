@@ -1,0 +1,28 @@
+[package]
+name       = "proof-api-eth-to-stellar"
+version    = { workspace = true }
+edition    = { workspace = true }
+repository = { workspace = true }
+license    = { workspace = true }
+
+[dependencies]
+proof-api-core            = { workspace = true, default-features = false }
+ibc-eureka-solidity-types = { workspace = true, features = ["rpc"] }
+sp1-ethereum-prover       = { path = "../../../sp1-ethereum-prover" }
+ethereum-apis             = { workspace = true }
+ethereum-light-client     = { workspace = true }
+ethereum-types            = { workspace = true }
+
+stellar-xdr = { version = "28.0.0", default-features = false, features = ["std", "base64"] }
+
+alloy      = { workspace = true, features = ["full", "reqwest-rustls-tls"] }
+reqwest    = { workspace = true, features = ["json", "rustls-tls"] }
+serde      = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["std"] }
+sha2       = { workspace = true, features = ["std"] }
+hex        = { workspace = true, features = ["std"] }
+anyhow     = { workspace = true, features = ["std"] }
+tonic      = { workspace = true, default-features = true }
+proof-api-history = { workspace = true }
+tokio      = { workspace = true, features = ["time", "rt"] }
+tracing    = { workspace = true, default-features = true }
