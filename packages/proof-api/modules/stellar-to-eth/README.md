@@ -70,8 +70,9 @@ Given one Stellar transaction hash:
 **`gateway_grpc_address`** is required to relay packets: without it every
 request fails before proving, with a message that says why.
 
-`archive_urls` overrides the network's default archive, and
-`checkpoint_timeout_seconds` (default 1200) bounds the wait in step 3.
+`archive_urls` overrides the network's default archive, and `checkpoint_timeout_seconds` (default 1200) bounds the wait in step 3.
+
+**`stellar_api_url`** points the module at an ipsa api (for example `https://api.ipsa.dev`) instead of the history archive. The archive publishes a ledger's SCP messages only with its checkpoint of 64 ledgers, so step 3 waits up to about five and a half minutes; an api backed by a stellar-core watcher serves them as the ledger closes, so the wait drops to seconds. The module then reads the SCP messages from `/archive/scp/{ledger}`, the header from `/archive/ledger-header/{ledger}`, the next ledger's transaction set from `/archive/tx-set/{ledger}`, and the transaction results from the close metadata of `/ledger/{ledger}`, and runs the same checks the archive export runs before proving: the header against its SCP messages, the results against the header, and the next slot against the ledger's hash. The api adds no trust, since every message is checked against the validators' signatures. `checkpoint_timeout_seconds` bounds the wait for the api as it does for the archive. `tests/stellar_api.rs` checks, when `STELLAR_LIVE_API_URL` is set, that the api yields exactly the archive's evidence for an archived ledger, and assembles a ledger the archive has not published yet.
 
 **`prover`** is `network` (default) or `execute`. `execute` is a free dry run:
 it does every step up to proving, executes both guests on the CPU, logs the cycle

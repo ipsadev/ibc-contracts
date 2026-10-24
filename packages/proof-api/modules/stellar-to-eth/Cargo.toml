@@ -29,3 +29,6 @@ tracing    = { workspace = true, default-features = true }
 
 [dev-dependencies]
 serde_json = { workspace = true, features = ["std"] }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+reqwest    = { workspace = true, features = ["json", "rustls-tls"] }
+ipsa-scp-exporter = { package = "ipsa-scp-verifier", version = "2.0.0", default-features = false, features = ["io"] }

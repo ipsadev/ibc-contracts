@@ -1,7 +1,9 @@
 mod archive;
+mod evidence;
 mod evm;
 pub mod gateway;
 pub mod soroban;
+pub mod stellar_api;
 pub mod witness;
 
 use std::{
@@ -48,8 +50,10 @@ use tonic::{Request, Response, Status};
 
 use crate::{
     archive::Archive,
+    evidence::Evidence,
     evm::{consensus_hash_of, Evm},
     soroban::{bytes, field, packet, router_events, RouterEvent, SorobanRpc},
+    stellar_api::StellarApi,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -61,6 +65,8 @@ pub struct StellarToEthConfiguration {
     pub stellar_network: String,
     #[serde(default)]
     pub archive_urls: Option<Vec<String>>,
+    #[serde(default)]
+    pub stellar_api_url: Option<String>,
     pub soroban_router: String,
     pub eth_rpc_url: String,
     pub ics26_address: Address,
@@ -102,7 +108,7 @@ const fn default_checkpoint_timeout() -> u64 {
 
 struct StellarToEthService {
     soroban: SorobanRpc,
-    archive: Archive,
+    evidence: Evidence,
     evm: Evm,
     router: [u8; 32],
     router_strkey: String,
@@ -408,11 +414,25 @@ impl StellarToEthService {
         };
         let evm = Evm::connect(&configuration.eth_rpc_url, configuration.ics26_address).await?;
         let chain_id = evm.chain_id().await?;
-        let archive = Archive::new(
-            &configuration.stellar_network,
-            configuration.archive_urls.clone(),
-            Duration::from_secs(configuration.checkpoint_timeout_seconds),
-        )?;
+        let timeout = Duration::from_secs(configuration.checkpoint_timeout_seconds);
+        let evidence = match configuration.stellar_api_url.as_deref() {
+            Some(url) if !url.is_empty() => {
+                tracing::info!(
+                    url,
+                    "reading Stellar's consensus evidence from the ipsa api"
+                );
+                Evidence::Api(StellarApi::new(
+                    url,
+                    &configuration.stellar_network,
+                    timeout,
+                )?)
+            }
+            _ => Evidence::Archive(Archive::new(
+                &configuration.stellar_network,
+                configuration.archive_urls.clone(),
+                timeout,
+            )?),
+        };
 
         let history = ProofHistory::from_env();
 
@@ -422,7 +442,7 @@ impl StellarToEthService {
 
         Ok(Self {
             soroban: SorobanRpc::new(configuration.soroban_rpc_url),
-            archive,
+            evidence,
             evm,
             router,
             router_strkey: configuration.soroban_router,
@@ -490,10 +510,10 @@ impl StellarToEthService {
             Some(raw) => raw
                 .parse::<u32>()
                 .with_context(|| format!("ledger {raw} is not a number"))?,
-            None => self.archive.current_ledger().await? - 2,
+            None => self.evidence.current_ledger().await? - 2,
         };
 
-        let fixture = self.archive.fixture(ledger).await?;
+        let fixture = self.evidence.fixture(ledger).await?;
         let trust_root: [u8; 32] = Sha256::digest(fixture.trust_root_xdr()).into();
         let network_id = sp1_stellar_prover::decode_hex32(&fixture.network_id);
 
@@ -588,9 +608,9 @@ impl StellarToEthService {
             )
         })?;
 
-        self.archive.wait_for(transaction.ledger).await?;
+        self.evidence.wait_for(transaction.ledger).await?;
 
-        let fixture = self.archive.fixture(transaction.ledger).await?;
+        let fixture = self.evidence.fixture(transaction.ledger).await?;
         let (mut fixture, consensus_state) = tokio::task::spawn_blocking(move || {
             let consensus_state = consensus_state_of(&fixture.verify_natively(None));
 
@@ -754,12 +774,12 @@ impl StellarToEthService {
                 .await;
         }
 
-        self.archive.wait_for(transaction.ledger).await?;
+        self.evidence.wait_for(transaction.ledger).await?;
 
         let trusted_ledger =
             u32::try_from(trusted_height).context("the trusted height does not fit a u32")?;
-        let trusted_fixture = self.archive.fixture(trusted_ledger).await?;
-        let mut fixture = self.archive.fixture(transaction.ledger).await?;
+        let trusted_fixture = self.evidence.fixture(trusted_ledger).await?;
+        let mut fixture = self.evidence.fixture(transaction.ledger).await?;
 
         let trusted_consensus_state = tokio::task::spawn_blocking(move || {
             consensus_state_of(&trusted_fixture.verify_natively(None))
@@ -878,7 +898,7 @@ impl ProofApiService for StellarToEthService {
                 ibc_contract: self.evm.router().to_string(),
             }),
             source_chain: Some(api::Chain {
-                chain_id: self.archive.network_label().to_string(),
+                chain_id: self.evidence.network_label().to_string(),
                 ibc_version: "2".to_string(),
                 ibc_contract: self.router_strkey.clone(),
             }),
