@@ -13,6 +13,7 @@ import { Escrow } from "../../contracts/utils/Escrow.sol";
 import { BeaconProxy } from "@openzeppelin-contracts/proxy/beacon/BeaconProxy.sol";
 import { UpgradeableBeacon } from "@openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { AccessManager } from "@openzeppelin-contracts/access/manager/AccessManager.sol";
+import { IBCRolesLib } from "../../contracts/utils/IBCRolesLib.sol";
 
 contract IBCERC20Test is Test {
     IBCERC20 public ibcERC20;
@@ -154,5 +155,42 @@ contract IBCERC20Test is Test {
             abi.encodeWithSelector(IERC20Errors.ERC20InsufficientBalance.selector, address(escrow), 1000, 1001)
         );
         ibcERC20.burn(address(escrow), 1001);
+    }
+
+    function authority() external view returns (address) {
+        return address(accessManager);
+    }
+
+    function test_success_SetMetadata() public {
+        accessManager.grantRole(IBCRolesLib.ERC20_CUSTOMIZER_ROLE, metadataCustomizer, 0);
+
+        vm.prank(metadataCustomizer);
+        ibcERC20.setMetadata(7, "Stellar Lumens", "XLM");
+
+        assertEq(ibcERC20.decimals(), 7);
+        assertEq(ibcERC20.name(), "Stellar Lumens");
+        assertEq(ibcERC20.symbol(), "XLM");
+        assertEq(ibcERC20.fullDenomPath(), "full/denom/path/test");
+    }
+
+    function test_success_SetMetadataAgain() public {
+        accessManager.grantRole(IBCRolesLib.ERC20_CUSTOMIZER_ROLE, metadataCustomizer, 0);
+
+        vm.startPrank(metadataCustomizer);
+        ibcERC20.setMetadata(7, "Stellar Lumens", "XLM");
+        ibcERC20.setMetadata(6, "Stellar Lumens", "XLM");
+        vm.stopPrank();
+
+        assertEq(ibcERC20.decimals(), 6);
+    }
+
+    function test_failure_SetMetadata() public {
+        address stranger = makeAddr("stranger");
+
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(IIBCERC20Errors.IBCERC20Unauthorized.selector, stranger));
+        ibcERC20.setMetadata(7, "Stellar Lumens", "XLM");
+
+        assertEq(ibcERC20.decimals(), 18);
     }
 }

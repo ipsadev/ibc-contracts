@@ -18,6 +18,9 @@ contract AttackerIBCERC20 is IIBCERC20, ERC20 {
     function initialize(address, address, string calldata) external { }
 
     /// @inheritdoc IIBCERC20
+    function setMetadata(uint8, string calldata, string calldata) external { }
+
+    /// @inheritdoc IIBCERC20
     function fullDenomPath() public pure returns (string memory) {
         return "transfer/client-0/uatom";
     }
