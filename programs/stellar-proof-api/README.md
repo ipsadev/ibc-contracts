@@ -37,6 +37,7 @@ per proof:
   `base_fee`, and the request and fulfilment times. A request's cost in PROVE is
   `base_fee + gas_used × gas_price`, in 18-decimal units.
 - **Failures** are recorded too, with the error.
+- **Retries** of a proof that failed or was not ready share its row: the relayer asks again every few seconds, and each attempt updates the status, the error and `last_attempt_at` and adds one to `attempts`. A gateway answer of `UNAVAILABLE`, evidence that is not published yet, is recorded as `waiting` rather than `failed`. A proof that succeeded is never overwritten; asking for it again records a new row.
 
 The connection uses TLS when the server offers it, verifying it against the web
 roots and Amazon's RDS bundle, and gives up after 5 seconds. Recording never fails a

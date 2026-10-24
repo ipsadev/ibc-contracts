@@ -10,7 +10,7 @@ use proof_api_history::{ProofEntry, ProofHistory};
 use serde::{Deserialize, Serialize};
 use tonic::{
     transport::{Channel, Endpoint},
-    Request, Response, Status,
+    Code, Request, Response, Status,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -48,10 +48,10 @@ pub fn entries(request: &api::RelayByTxRequest, error: Option<&Status>) -> Vec<P
             step: 0,
             program: "ics23".to_string(),
             prover: "gateway".to_string(),
-            status: if error.is_some() {
-                "failed"
-            } else {
-                "fulfilled"
+            status: match error.map(Status::code) {
+                None => "fulfilled",
+                Some(Code::Unavailable) => "waiting",
+                Some(_) => "failed",
             }
             .to_string(),
             error: error.map(|status| status.message().to_string()),

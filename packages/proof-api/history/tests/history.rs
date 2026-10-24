@@ -121,3 +121,86 @@ async fn a_proof_is_written_and_read_back() {
     );
     assert_eq!(row.get::<_, Option<Vec<u8>>>(5), Some(vec![4, 5, 6]));
 }
+
+fn gateway_attempt(tx_hash: &str, status: &str, error: Option<&str>) -> ProofEntry {
+    ProofEntry {
+        module: "forward".to_string(),
+        src_chain: "stellar-testnet".to_string(),
+        dst_chain: "provider".to_string(),
+        kind: "relay".to_string(),
+        tx_hash: tx_hash.to_string(),
+        sequences: vec![17],
+        step: 0,
+        program: "ics23".to_string(),
+        prover: "gateway".to_string(),
+        status: status.to_string(),
+        error: error.map(str::to_string),
+        vkey: None,
+        trusted_height: None,
+        target_height: None,
+        public_values: None,
+        proof: None,
+        request: None,
+    }
+}
+
+#[tokio::test]
+async fn retries_of_one_proof_share_a_row() {
+    let Ok(url) = std::env::var("PROOF_HISTORY_TEST_DB_URL") else {
+        return;
+    };
+
+    let history = ProofHistory::new(Some(url.clone()));
+    let hash = format!(
+        "{:064x}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let hash = hash.as_str();
+
+    history.prepare().await.unwrap();
+    history
+        .record(&gateway_attempt(
+            hash,
+            "waiting",
+            Some("ledger 5354244 is not available yet"),
+        ))
+        .await;
+    history
+        .record(&gateway_attempt(
+            hash,
+            "failed",
+            Some("header assembly failed"),
+        ))
+        .await;
+    history
+        .record(&gateway_attempt(hash, "fulfilled", None))
+        .await;
+    history
+        .record(&gateway_attempt(hash, "fulfilled", None))
+        .await;
+
+    let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+        .await
+        .unwrap();
+    tokio::spawn(connection);
+
+    let rows = client
+        .query(
+            "SELECT status, error, attempts, last_attempt_at IS NOT NULL \
+             FROM proof_requests WHERE tx_hash = $1 ORDER BY id",
+            &[&hash],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].get::<_, String>(0), "fulfilled");
+    assert_eq!(rows[0].get::<_, Option<String>>(1), None);
+    assert_eq!(rows[0].get::<_, i32>(2), 3);
+    assert!(rows[0].get::<_, bool>(3));
+    assert_eq!(rows[1].get::<_, String>(0), "fulfilled");
+    assert_eq!(rows[1].get::<_, i32>(2), 1);
+}

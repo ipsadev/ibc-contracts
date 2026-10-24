@@ -50,7 +50,21 @@ pub const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS proof_requests (
 );
 CREATE INDEX IF NOT EXISTS proof_requests_tx_hash ON proof_requests (tx_hash);
 CREATE UNIQUE INDEX IF NOT EXISTS proof_requests_request_id ON proof_requests (request_id)
-    WHERE request_id IS NOT NULL;";
+    WHERE request_id IS NOT NULL;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'proof_requests' AND column_name = 'attempts') THEN
+        ALTER TABLE proof_requests ADD COLUMN attempts INTEGER NOT NULL DEFAULT 1;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'proof_requests' AND column_name = 'last_attempt_at') THEN
+        ALTER TABLE proof_requests ADD COLUMN last_attempt_at TIMESTAMPTZ;
+    END IF;
+END $$;";
+
+pub const RETRYABLE: [&str; 2] = ["failed", "waiting"];
+
+const SCHEMA_LOCK: i64 = 0x7072_6f6f_6673;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct NetworkRequest {
@@ -150,11 +164,24 @@ impl ProofHistory {
             return Ok(());
         };
 
-        connect(url)
-            .await?
+        let mut client = connect(url).await?;
+        let transaction = client
+            .transaction()
+            .await
+            .context("starting the proof history schema transaction")?;
+
+        transaction
+            .execute("SELECT pg_advisory_xact_lock($1)", &[&SCHEMA_LOCK])
+            .await
+            .context("waiting for another process creating proof_requests")?;
+        transaction
             .batch_execute(SCHEMA)
             .await
             .context("creating proof_requests")?;
+        transaction
+            .commit()
+            .await
+            .context("committing proof_requests")?;
 
         tracing::info!("recording every proof in proof_requests");
 
@@ -178,15 +205,71 @@ impl ProofHistory {
 }
 
 async fn insert(url: &str, entry: &ProofEntry) -> Result<()> {
-    let client = connect(url).await?;
+    let mut client = connect(url).await?;
     let request = entry.request.clone().unwrap_or_default();
     let sequences: Vec<i64> = entry
         .sequences
         .iter()
         .map(|sequence| *sequence as i64)
         .collect();
+    let tx_hash = normalise_tx_hash(&entry.tx_hash);
 
-    client
+    let transaction = client
+        .transaction()
+        .await
+        .context("starting a proof history transaction")?;
+
+    if entry.request.is_none() {
+        let previous = transaction
+            .query_opt(
+                "SELECT id, status FROM proof_requests \
+                 WHERE tx_hash = $1 AND module = $2 AND kind = $3 AND program = $4 \
+                 AND step = $5 AND sequences = $6 AND src_chain = $7 AND dst_chain = $8 \
+                 ORDER BY id DESC LIMIT 1 FOR UPDATE",
+                &[
+                    &tx_hash,
+                    &entry.module,
+                    &entry.kind,
+                    &entry.program,
+                    &(entry.step as i32),
+                    &sequences,
+                    &entry.src_chain,
+                    &entry.dst_chain,
+                ],
+            )
+            .await
+            .context("reading the previous attempt")?;
+
+        if let Some(previous) =
+            previous.filter(|row| RETRYABLE.contains(&row.get::<_, String>(1).as_str()))
+        {
+            transaction
+                .execute(
+                    "UPDATE proof_requests SET status = $2, error = $3, vkey = $4, \
+                     trusted_height = $5, target_height = $6, public_values = $7, proof = $8, \
+                     attempts = attempts + 1, last_attempt_at = now() WHERE id = $1",
+                    &[
+                        &previous.get::<_, i64>(0),
+                        &entry.status,
+                        &entry.error,
+                        &entry.vkey.map(|vkey| format!("0x{}", hex::encode(vkey))),
+                        &entry.trusted_height.map(|height| height as i64),
+                        &entry.target_height.map(|height| height as i64),
+                        &entry.public_values,
+                        &entry.proof,
+                    ],
+                )
+                .await
+                .context("recording another attempt")?;
+
+            return transaction
+                .commit()
+                .await
+                .context("committing the proof history");
+        }
+    }
+
+    transaction
         .execute(
             "INSERT INTO proof_requests (module, src_chain, dst_chain, kind, tx_hash, sequences, \
              step, program, prover, status, error, vkey, trusted_height, target_height, \
@@ -201,7 +284,7 @@ async fn insert(url: &str, entry: &ProofEntry) -> Result<()> {
                 &entry.src_chain,
                 &entry.dst_chain,
                 &entry.kind,
-                &normalise_tx_hash(&entry.tx_hash),
+                &tx_hash,
                 &sequences,
                 &(entry.step as i32),
                 &entry.program,
@@ -230,7 +313,10 @@ async fn insert(url: &str, entry: &ProofEntry) -> Result<()> {
         .await
         .context("inserting into proof_requests")?;
 
-    Ok(())
+    transaction
+        .commit()
+        .await
+        .context("committing the proof history")
 }
 
 async fn connect(url: &str) -> Result<Client> {

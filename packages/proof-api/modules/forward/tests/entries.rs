@@ -38,3 +38,15 @@ fn a_refused_forward_is_recorded_as_failed_with_the_reason() {
     assert_eq!(found[0].status, "failed");
     assert_eq!(found[0].error.as_deref(), Some("cosmos header failed"));
 }
+
+#[test]
+fn evidence_that_is_not_ready_is_recorded_as_waiting() {
+    let not_ready = Status::unavailable("ledger 5354244 is not available yet");
+    let found = entries(&request(vec![b"E534991C3D".to_vec()]), Some(&not_ready));
+
+    assert_eq!(found[0].status, "waiting");
+    assert_eq!(
+        found[0].error.as_deref(),
+        Some("ledger 5354244 is not available yet")
+    );
+}
