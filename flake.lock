@@ -229,15 +229,16 @@
         "solc-macos-amd64-list-json": "solc-macos-amd64-list-json"
       },
       "locked": {
-        "lastModified": 1786461652,
-        "narHash": "sha256-+ClEiyzReHNF93b8TZMt5QePhjTraXnO9eukkl3Flec=",
-        "owner": "hellwolf",
+        "lastModified": 1790674756,
+        "narHash": "sha256-NblaqZuvcCv7aksTwd/4PCwZ46vJGMpdRF0uiYZMETw=",
+        "owner": "srdtrk",
         "repo": "solc.nix",
-        "rev": "9b3df77eb12b9716f4783b802b4332bfbfa5b4f7",
+        "rev": "63f0afda8808b3221724394f1c4f4e56c2fe0579",
         "type": "github"
       },
       "original": {
-        "owner": "hellwolf",
+        "owner": "srdtrk",
+        "ref": "v_0_8_37",
         "repo": "solc.nix",
         "type": "github"
       }
@@ -245,13 +246,13 @@
     "solc-macos-amd64-list-json": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-Vfa5XmxKcrBfMdJX3nWo+s0YixtdZND6l4llwNp+Xl0=",
+        "narHash": "sha256-umYJxSnvOdLAKgeqojpevvEEt8qnL2lk/jWbR9HjzNg=",
         "type": "file",
-        "url": "https://github.com/argotorg/solc-bin/raw/97e2659/macosx-amd64/list.json"
+        "url": "https://github.com/argotorg/solc-bin/raw/8d513ea/macosx-amd64/list.json"
       },
       "original": {
         "type": "file",
-        "url": "https://github.com/argotorg/solc-bin/raw/97e2659/macosx-amd64/list.json"
+        "url": "https://github.com/argotorg/solc-bin/raw/8d513ea/macosx-amd64/list.json"
       }
     },
     "sp1": {
@@ -262,11 +263,11 @@
         "systems": "systems_4"
       },
       "locked": {
-        "lastModified": 1776216887,
-        "narHash": "sha256-fKhIDJGcF65BRvXqbgE37R6NC7Rq4HEDdPrlcVficCI=",
+        "lastModified": 1791922648,
+        "narHash": "sha256-MYKFYtyVaZmea0fyykLGZluXjcbTrONB6eZF0aJRKBY=",
         "owner": "vaporif",
         "repo": "sp1-overlay",
-        "rev": "c44b833515c90f80965f03f9ed09c6b3be28f1d5",
+        "rev": "6f9fda60eedc0dbfdbca84a6933c671668605e03",
         "type": "github"
       },
       "original": {

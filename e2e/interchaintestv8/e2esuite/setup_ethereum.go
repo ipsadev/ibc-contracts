@@ -14,9 +14,9 @@ import (
 	icfoundry "github.com/cosmos/interchaintest/v11/chain/ethereum/foundry"
 	"github.com/cosmos/interchaintest/v11/ibc"
 
-	"github.com/srdtrk/solidity-ibc-eureka/e2e/v8/chainconfig"
-	"github.com/srdtrk/solidity-ibc-eureka/e2e/v8/ethereum"
-	"github.com/srdtrk/solidity-ibc-eureka/e2e/v8/testvalues"
+	"github.com/cosmos/ibc-contracts/e2e/v8/chainconfig"
+	"github.com/cosmos/ibc-contracts/e2e/v8/ethereum"
+	"github.com/cosmos/ibc-contracts/e2e/v8/testvalues"
 )
 
 const (
@@ -85,19 +85,19 @@ func (s *TestSuite) processEthereumPoSResult(ctx context.Context, chain *chainco
 	s.Eth.Chains = append(s.Eth.Chains, &ethChain)
 }
 
-func (s *TestSuite) setupEthereumBesuQBFT(ctx context.Context, networkID string) (*chainconfig.BesuQBFTChain, error) {
-	params := chainconfig.DefaultBesuQBFTParams()
+func (s *TestSuite) setupEthereumBesuQBFT(ctx context.Context, networkID string) (*chainconfig.BesuChain, error) {
+	params := chainconfig.DefaultBesuParams(testvalues.BesuConsensusQBFT)
 	params.DockerRPCAlias = "besu-qbft-rpc"
 	params.InterchainNetworkID = networkID
 
-	chain, err := chainconfig.SpinUpBesuQBFT(ctx, params)
+	chain, err := chainconfig.SpinUpBesu(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 	return &chain, nil
 }
 
-func (s *TestSuite) processEthereumBesuQBFTResult(ctx context.Context, chain *chainconfig.BesuQBFTChain) {
+func (s *TestSuite) processEthereumBesuQBFTResult(ctx context.Context, chain *chainconfig.BesuChain) {
 	if chain == nil {
 		return
 	}

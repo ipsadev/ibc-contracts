@@ -3,39 +3,87 @@
     "type": "constructor",
     "inputs": [
       {
-        "name": "ibcRouter",
-        "type": "address",
-        "internalType": "address"
+        "name": "initialClientState",
+        "type": "tuple",
+        "internalType": "struct IBesuLightClientMsgs.ClientState",
+        "components": [
+          {
+            "name": "ibcRouter",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "latestHeight",
+            "type": "tuple",
+            "internalType": "struct IICS02ClientMsgs.Height",
+            "components": [
+              {
+                "name": "revisionNumber",
+                "type": "uint64",
+                "internalType": "uint64"
+              },
+              {
+                "name": "revisionHeight",
+                "type": "uint64",
+                "internalType": "uint64"
+              }
+            ]
+          },
+          {
+            "name": "trustingPeriod",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "maxClockDrift",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "isFrozen",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "trustLevel",
+            "type": "tuple",
+            "internalType": "struct IBesuLightClientMsgs.TrustThreshold",
+            "components": [
+              {
+                "name": "numerator",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "denominator",
+                "type": "uint8",
+                "internalType": "uint8"
+              }
+            ]
+          }
+        ]
       },
       {
-        "name": "initialTrustedHeight",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "initialTrustedTimestamp",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "initialTrustedStateRoot",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "initialTrustedValidators",
-        "type": "address[]",
-        "internalType": "address[]"
-      },
-      {
-        "name": "trustingPeriod",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "maxClockDrift",
-        "type": "uint64",
-        "internalType": "uint64"
+        "name": "initialConsensusState",
+        "type": "tuple",
+        "internalType": "struct IBesuLightClientMsgs.ConsensusState",
+        "components": [
+          {
+            "name": "timestamp",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "stateRoot",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "validators",
+            "type": "address[]",
+            "internalType": "address[]"
+          }
+        ]
       },
       {
         "name": "roleManager",
@@ -169,13 +217,13 @@
     "name": "misbehaviour",
     "inputs": [
       {
-        "name": "",
+        "name": "misbehaviourMsg",
         "type": "bytes",
         "internalType": "bytes"
       }
     ],
     "outputs": [],
-    "stateMutability": "view"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -354,6 +402,31 @@
   },
   {
     "type": "event",
+    "name": "DoubleSign",
+    "inputs": [
+      {
+        "name": "revisionHeight",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "consensusStateHash1",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "consensusStateHash2",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RoleAdminChanged",
     "inputs": [
       {
@@ -428,6 +501,37 @@
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "TimeNonMonotonicity",
+    "inputs": [
+      {
+        "name": "height2",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "height1",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "timestamp2",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "timestamp1",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "AccessControlBadConfirmation",
     "inputs": []
@@ -445,17 +549,6 @@
         "name": "neededRole",
         "type": "bytes32",
         "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ConflictingConsensusState",
-    "inputs": [
-      {
-        "name": "revisionHeight",
-        "type": "uint64",
-        "internalType": "uint64"
       }
     ]
   },
@@ -509,18 +602,12 @@
   },
   {
     "type": "error",
-    "name": "DuplicateCommitSealSigner",
-    "inputs": [
-      {
-        "name": "signer",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
+    "name": "EmptyValidatorSet",
+    "inputs": []
   },
   {
     "type": "error",
-    "name": "EmptyValidatorSet",
+    "name": "FrozenClientState",
     "inputs": []
   },
   {
@@ -658,6 +745,11 @@
   },
   {
     "type": "error",
+    "name": "InvalidIbcRouter",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidMixHash",
     "inputs": [
       {
@@ -718,6 +810,38 @@
   },
   {
     "type": "error",
+    "name": "InvalidTrustLevel",
+    "inputs": [
+      {
+        "name": "numerator",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "denominator",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidTrustedHeight",
+    "inputs": [
+      {
+        "name": "trustedHeight",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "headerHeight",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidTrustingPeriod",
     "inputs": []
   },
@@ -747,6 +871,11 @@
         "internalType": "uint256"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "NoMisbehaviourDetected",
+    "inputs": []
   },
   {
     "type": "error",
@@ -804,7 +933,7 @@
   },
   {
     "type": "error",
-    "name": "UnsortedValidatorSet",
+    "name": "UnsortedCommitSealSigners",
     "inputs": [
       {
         "name": "index",
@@ -815,7 +944,13 @@
   },
   {
     "type": "error",
-    "name": "UnsupportedMisbehaviour",
-    "inputs": []
+    "name": "UnsortedValidatorSet",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   }
 ]

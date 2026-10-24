@@ -81,7 +81,7 @@ shadowfork := if env("ETH_RPC_URL", "") == "" { "--no-match-path test/shadowfork
 # Run all the foundry tests
 [group('test')]
 test-foundry testname=".\\*":
-	forge test -vvv --show-progress --fuzz-runs 5000 --match-test ^{{testname}}\(.\*\)\$ {{shadowfork}}
+	forge test -vvv --show-progress --match-test ^{{testname}}\(.\*\)\$ {{shadowfork}}
 	@ {{ if shadowfork == "" { "" } else { 'echo ' + BOLD + YELLOW + 'Ran without shadowfork tests since ETH_RPC_URL was not set' } }}
 
 # Run the CosmWasm Ethereum light client tests
@@ -119,11 +119,11 @@ generate-fixtures-tendermint-light-client: _install-proof-api
 	@echo "Generating basic membership and update client fixtures..."
 	cd ../e2e/interchaintestv8 && GENERATE_TENDERMINT_LIGHT_CLIENT_FIXTURES=true go test -v -run '^TestWithCosmosProofAPITestSuite/Test_UpdateClient$' -timeout 40m
 
-# Generate the Besu QBFT light-client fixtures using the focused e2e test
+# Generate the Besu QBFT and IBFT2 light-client fixtures using the focused e2e tests
 [group('generate')]
 generate-fixtures-besu: clean-foundry _install-proof-api
-	@echo "Generating Besu QBFT light client fixtures... This may take a while."
-	cd ../e2e/interchaintestv8 && GENERATE_BESU_LIGHT_CLIENT_FIXTURES=true go test -v -run '^TestWithBesuToBesuTestSuite/Test_ICS20TransferERC20FromChainAToChainB$' -timeout 120m
+	@echo "Generating Besu QBFT and IBFT2 light client fixtures... This may take a while."
+	cd ../e2e/interchaintestv8 && GENERATE_BESU_LIGHT_CLIENT_FIXTURES=true go test -v -run '^TestWithBesuToBesuTestSuite$/^Test_ICS20TransferERC20FromChainAToChainB_(QBFT|IBFT2)$' -timeout 120m
 	@echo "Fixtures generated at 'ibc-solidity/test/besu-bft/fixtures'"
 
 # Generate Go types for the e2e tests from the Ethereum light-client schema
@@ -207,15 +207,24 @@ generate-abi: build-contracts
 	jq '.abi' out/BesuQBFTLightClient.sol/BesuQBFTLightClient.json > abi/BesuQBFTLightClient.json
 	jq '.abi' out/IBesuLightClientEncoding.sol/IBesuLightClientEncoding.json > abi/IBesuLightClientEncoding.json
 	jq '.abi' out/IBesuLightClientErrors.sol/IBesuLightClientErrors.json > abi/IBesuLightClientErrors.json
+	jq -r '.bytecode.object' out/BesuIBFT2LightClient.sol/BesuIBFT2LightClient.json > tmp/abigen/BesuIBFT2LightClient.bin
 	jq -r '.bytecode.object' out/BesuQBFTLightClient.sol/BesuQBFTLightClient.json > tmp/abigen/BesuQBFTLightClient.bin
 	jq '.abi' out/IFTOwnable.sol/IFTOwnable.json > abi/IFTOwnable.json
 	jq -r '.bytecode.object' out/IFTOwnable.sol/IFTOwnable.json > tmp/abigen/IFTOwnable.bin
+	jq '.abi' out/IFTOwnable2Step.sol/IFTOwnable2Step.json > abi/IFTOwnable2Step.json
+	jq -r '.bytecode.object' out/IFTOwnable2Step.sol/IFTOwnable2Step.json > tmp/abigen/IFTOwnable2Step.bin
+	jq '.abi' out/IFTAccessManaged.sol/IFTAccessManaged.json > abi/IFTAccessManaged.json
+	jq -r '.bytecode.object' out/IFTAccessManaged.sol/IFTAccessManaged.json > tmp/abigen/IFTAccessManaged.bin
+	jq '.abi' out/IBCMulticall.sol/IBCMulticall.json > abi/IBCMulticall.json
+	jq -r '.bytecode.object' out/IBCMulticall.sol/IBCMulticall.json > tmp/abigen/IBCMulticall.bin
 	jq '.abi' out/ERC1967Proxy.sol/ERC1967Proxy.json > abi/ERC1967Proxy.json
 	jq -r '.bytecode.object' out/ERC1967Proxy.sol/ERC1967Proxy.json > tmp/abigen/ERC1967Proxy.bin
 	jq '.abi' out/EVMIFTSendCallConstructor.sol/EVMIFTSendCallConstructor.json > abi/EVMIFTSendCallConstructor.json
 	jq -r '.bytecode.object' out/EVMIFTSendCallConstructor.sol/EVMIFTSendCallConstructor.json > tmp/abigen/EVMIFTSendCallConstructor.bin
 	abigen --abi abi/ERC20.json --bin tmp/abigen/ERC20.bin --pkg erc20 --type Contract --out ../e2e/interchaintestv8/types/erc20/contract.go
 	abigen --abi abi/IFTOwnable.json --bin tmp/abigen/IFTOwnable.bin --pkg ift --type Contract --out ../packages/go-abigen/ift/contract.go
+	abigen --abi abi/IFTOwnable2Step.json --bin tmp/abigen/IFTOwnable2Step.bin --pkg iftownable2step --type Contract --out ../packages/go-abigen/iftownable2step/contract.go
+	abigen --abi abi/IFTAccessManaged.json --bin tmp/abigen/IFTAccessManaged.bin --pkg iftaccessmanaged --type Contract --out ../packages/go-abigen/iftaccessmanaged/contract.go
 	abigen --abi abi/SP1ICS07Tendermint.json --bin tmp/abigen/SP1ICS07Tendermint.bin --pkg sp1ics07tendermint --type Contract --out ../packages/go-abigen/sp1ics07tendermint/contract.go
 	abigen --abi abi/ICS20Transfer.json --bin tmp/abigen/ICS20Transfer.bin --pkg ics20transfer --type Contract --out ../packages/go-abigen/ics20transfer/contract.go
 	abigen --abi abi/ICS26Router.json --bin tmp/abigen/ICS26Router.bin --pkg ics26router --type Contract --out ../packages/go-abigen/ics26router/contract.go
@@ -224,12 +233,11 @@ generate-abi: build-contracts
 	abigen --abi abi/ICS27GMP.json --bin tmp/abigen/ICS27GMP.bin --pkg ics27gmp --type Contract --out ../packages/go-abigen/ics27gmp/contract.go
 	abigen --abi abi/RelayerHelper.json --bin tmp/abigen/RelayerHelper.bin --pkg relayerhelper --type Contract --out ../packages/go-abigen/relayerhelper/contract.go
 	abigen --abi abi/AttestationLightClient.json --bin tmp/abigen/AttestationLightClient.bin --pkg attestation --type Contract --out ../packages/go-abigen/attestation/contract.go
-	mkdir -p ../packages/go-abigen/besuqbft
+	abigen --abi abi/BesuIBFT2LightClient.json --bin tmp/abigen/BesuIBFT2LightClient.bin --pkg besuibft2 --type Contract --out ../packages/go-abigen/besuibft2/contract.go
 	abigen --abi abi/BesuQBFTLightClient.json --bin tmp/abigen/BesuQBFTLightClient.bin --pkg besuqbft --type Contract --out ../packages/go-abigen/besuqbft/contract.go
-	mkdir -p ../packages/go-abigen/besumsgs
 	abigen --v2 --abi abi/IBesuLightClientEncoding.json --pkg besumsgs --type Bindings --out ../packages/go-abigen/besumsgs/bindings.go
-	mkdir -p ../packages/go-abigen/besuerrors
 	abigen --v2 --abi abi/IBesuLightClientErrors.json --pkg besuerrors --type Bindings --out ../packages/go-abigen/besuerrors/bindings.go
+	abigen --abi abi/IBCMulticall.json --bin tmp/abigen/IBCMulticall.bin --pkg ibcmulticall --type Contract --out ../packages/go-abigen/ibcmulticall/contract.go
 	abigen --abi abi/ERC1967Proxy.json --bin tmp/abigen/ERC1967Proxy.bin --pkg erc1967proxy --type Contract --out ../packages/go-abigen/erc1967proxy/contract.go
 	abigen --abi abi/EVMIFTSendCallConstructor.json --bin tmp/abigen/EVMIFTSendCallConstructor.bin --pkg evmiftsendcall --type Contract --out ../packages/go-abigen/evmiftsendcall/contract.go
 	rm -rf abi/bytecode

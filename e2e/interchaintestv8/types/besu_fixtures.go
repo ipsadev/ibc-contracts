@@ -24,18 +24,20 @@ import (
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	ibchostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 
-	"github.com/srdtrk/solidity-ibc-eureka/e2e/v8/ethereum"
-	"github.com/srdtrk/solidity-ibc-eureka/e2e/v8/testvalues"
+	"github.com/cosmos/ibc-contracts/e2e/v8/ethereum"
+	"github.com/cosmos/ibc-contracts/e2e/v8/testvalues"
 )
 
 type BesuFixtureGenerator struct {
 	Enabled bool
 }
 
-type GenerateQBFTFixtureParams struct {
+type GenerateBesuFixtureParams struct {
+	// Consensus is testvalues.BesuConsensusQBFT or testvalues.BesuConsensusIBFT2, and names the fixture file.
+	Consensus               string
 	SourceChain             *ethereum.Ethereum
 	RouterAddress           ethcommon.Address
 	Packet                  ics26router.IICS26RouterMsgsPacket
@@ -94,7 +96,8 @@ type liveHeader struct {
 	Validators []ethcommon.Address
 }
 
-type mutableQBFTHeader struct {
+type mutableBesuHeader struct {
+	consensus  string
 	items      []rlp.RawValue
 	extraItems []rlp.RawValue
 }
@@ -111,12 +114,12 @@ func NewBesuFixtureGenerator() *BesuFixtureGenerator {
 	}
 }
 
-func (g *BesuFixtureGenerator) GenerateAndSaveQBFTFixture(ctx context.Context, params GenerateQBFTFixtureParams) error {
+func (g *BesuFixtureGenerator) GenerateAndSaveFixture(ctx context.Context, params GenerateBesuFixtureParams) error {
 	if !g.Enabled {
 		return nil
 	}
 
-	fixture, err := generateQBFTFixture(ctx, params)
+	fixture, err := generateBesuFixture(ctx, params)
 	if err != nil {
 		return err
 	}
@@ -126,12 +129,12 @@ func (g *BesuFixtureGenerator) GenerateAndSaveQBFTFixture(ctx context.Context, p
 		return err
 	}
 
-	fixturePath := filepath.Join(testvalues.BesuBFTFixturesDir, "qbft.json")
+	fixturePath := filepath.Join(testvalues.BesuBFTFixturesDir, params.Consensus+".json")
 	// The checked-in fixture is intentionally readable by all test processes.
 	return os.WriteFile(fixturePath, fixtureBz, 0o644) //nolint:gosec
 }
 
-func generateQBFTFixture(ctx context.Context, params GenerateQBFTFixtureParams) (besuFixture, error) {
+func generateBesuFixture(ctx context.Context, params GenerateBesuFixtureParams) (besuFixture, error) {
 	if params.SourceChain == nil {
 		return besuFixture{}, fmt.Errorf("missing source chain")
 	}
@@ -148,37 +151,38 @@ func generateQBFTFixture(ctx context.Context, params GenerateQBFTFixtureParams) 
 		return besuFixture{}, fmt.Errorf("synthetic source height must be greater than non-adjacent update height")
 	}
 
-	trustedHeader, err := fetchLiveHeader(ctx, params.SourceChain, params.InitialTrustedHeight)
+	trustedHeader, err := fetchLiveHeader(ctx, params.SourceChain, params.Consensus, params.InitialTrustedHeight)
 	if err != nil {
 		return besuFixture{}, err
 	}
-	nonAdjacentHeader, err := fetchLiveHeader(ctx, params.SourceChain, params.NonAdjacentUpdateHeight)
+	nonAdjacentHeader, err := fetchLiveHeader(ctx, params.SourceChain, params.Consensus, params.NonAdjacentUpdateHeight)
 	if err != nil {
 		return besuFixture{}, err
 	}
-	syntheticSourceHeader, err := fetchLiveHeader(ctx, params.SourceChain, params.SyntheticSourceHeight)
-	if err != nil {
-		return besuFixture{}, err
-	}
-
-	validatorKeys, err := loadQBFTValidatorKeys()
+	syntheticSourceHeader, err := fetchLiveHeader(ctx, params.SourceChain, params.Consensus, params.SyntheticSourceHeight)
 	if err != nil {
 		return besuFixture{}, err
 	}
 
-	adjacentUpdate, err := buildLiveUpdateFixture(ctx, params.SourceChain, params.InitialTrustedHeight, params.AdjacentUpdateHeight)
+	validatorKeys, err := loadBesuValidatorKeys()
 	if err != nil {
 		return besuFixture{}, err
 	}
-	nonAdjacentUpdate, err := buildLiveUpdateFixture(ctx, params.SourceChain, params.InitialTrustedHeight, params.NonAdjacentUpdateHeight)
+
+	adjacentUpdate, err := buildLiveUpdateFixture(ctx, params.SourceChain, params.Consensus, params.InitialTrustedHeight, params.AdjacentUpdateHeight)
 	if err != nil {
 		return besuFixture{}, err
 	}
-	lowQuorumUpdate, err := buildLowQuorumFixture(nonAdjacentUpdate, nonAdjacentHeader)
+	nonAdjacentUpdate, err := buildLiveUpdateFixture(ctx, params.SourceChain, params.Consensus, params.InitialTrustedHeight, params.NonAdjacentUpdateHeight)
+	if err != nil {
+		return besuFixture{}, err
+	}
+	lowQuorumUpdate, err := buildLowQuorumFixture(params.Consensus, nonAdjacentUpdate, nonAdjacentHeader)
 	if err != nil {
 		return besuFixture{}, err
 	}
 	conflictingUpdate, err := buildConflictingFixture(
+		params.Consensus,
 		params.InitialTrustedHeight,
 		nonAdjacentUpdate.Height,
 		syntheticSourceHeader,
@@ -188,6 +192,7 @@ func generateQBFTFixture(ctx context.Context, params GenerateQBFTFixtureParams) 
 		return besuFixture{}, err
 	}
 	lowOverlapUpdate, err := buildLowOverlapFixture(
+		params.Consensus,
 		params.InitialTrustedHeight,
 		nonAdjacentUpdate.Height+1,
 		syntheticSourceHeader,
@@ -226,10 +231,11 @@ func generateQBFTFixture(ctx context.Context, params GenerateQBFTFixtureParams) 
 func buildLiveUpdateFixture(
 	ctx context.Context,
 	chain *ethereum.Ethereum,
+	consensus string,
 	trustedHeight uint64,
 	targetHeight uint64,
 ) (besuUpdateFixture, error) {
-	header, err := fetchLiveHeader(ctx, chain, targetHeight)
+	header, err := fetchLiveHeader(ctx, chain, consensus, targetHeight)
 	if err != nil {
 		return besuUpdateFixture{}, err
 	}
@@ -244,8 +250,8 @@ func buildLiveUpdateFixture(
 	}, nil
 }
 
-func buildLowQuorumFixture(update besuUpdateFixture, header liveHeader) (besuRejectionUpdateFixture, error) {
-	mutable, err := decodeMutableQBFTHeader(header.HeaderRLP)
+func buildLowQuorumFixture(consensus string, update besuUpdateFixture, header liveHeader) (besuRejectionUpdateFixture, error) {
+	mutable, err := decodeMutableBesuHeader(header.HeaderRLP, consensus)
 	if err != nil {
 		return besuRejectionUpdateFixture{}, err
 	}
@@ -269,27 +275,110 @@ func buildLowQuorumFixture(update besuUpdateFixture, header liveHeader) (besuRej
 	}, nil
 }
 
+// BuildBesuUpdate returns an abi-encoded MsgUpdateClient carrying the live header at height, trusting the live
+// consensus state at trustedHeight. consensus is testvalues.BesuConsensusQBFT or testvalues.BesuConsensusIBFT2.
+func BuildBesuUpdate(ctx context.Context, chain *ethereum.Ethereum, consensus string, trustedHeight, height uint64) ([]byte, error) {
+	return buildBesuUpdate(ctx, chain, consensus, trustedHeight, height, nil)
+}
+
+// BuildBesuDoubleSignUpdate is BuildBesuUpdate with the header's stateRoot replaced and re-sealed, so a client that
+// already stores height detects a double sign.
+func BuildBesuDoubleSignUpdate(ctx context.Context, chain *ethereum.Ethereum, consensus string, trustedHeight, height uint64) ([]byte, error) {
+	return buildBesuUpdate(ctx, chain, consensus, trustedHeight, height, func(h *mutableBesuHeader) {
+		h.setStateRoot(crypto.Keccak256Hash([]byte("double sign")))
+	})
+}
+
+// BuildBesuTimestampUpdate is BuildBesuUpdate with the header's timestamp replaced and re-sealed.
+func BuildBesuTimestampUpdate(ctx context.Context, chain *ethereum.Ethereum, consensus string, trustedHeight, height, timestamp uint64) ([]byte, error) {
+	return buildBesuUpdate(ctx, chain, consensus, trustedHeight, height, func(h *mutableBesuHeader) {
+		h.setTimestamp(timestamp)
+	})
+}
+
+// FetchBesuConsensusState returns the consensus state preimage of the live header at height.
+func FetchBesuConsensusState(ctx context.Context, chain *ethereum.Ethereum, consensus string, height uint64) (besumsgs.IBesuLightClientMsgsConsensusState, error) {
+	header, err := fetchLiveHeader(ctx, chain, consensus, height)
+	if err != nil {
+		return besumsgs.IBesuLightClientMsgsConsensusState{}, err
+	}
+	return header.consensusState(), nil
+}
+
+// FetchBesuCommitSealSigners returns the signers of the commit seals in the live header at height.
+func FetchBesuCommitSealSigners(ctx context.Context, chain *ethereum.Ethereum, consensus string, height uint64) ([]ethcommon.Address, error) {
+	header, err := fetchLiveHeader(ctx, chain, consensus, height)
+	if err != nil {
+		return nil, err
+	}
+	mutable, err := decodeMutableBesuHeader(header.HeaderRLP, consensus)
+	if err != nil {
+		return nil, err
+	}
+	seals, err := mutable.commitSeals()
+	if err != nil {
+		return nil, err
+	}
+	digest := mutable.commitSealDigest()
+	signers := make([]ethcommon.Address, len(seals))
+	for i, seal := range seals {
+		pubkey, err := crypto.SigToPub(digest.Bytes(), seal)
+		if err != nil {
+			return nil, err
+		}
+		signers[i] = crypto.PubkeyToAddress(*pubkey)
+	}
+	return signers, nil
+}
+
+// buildBesuUpdate applies mutate, if non-nil, to the live header at height and re-seals it with a quorum of the local
+// validator keys, read relative to the repository root.
+func buildBesuUpdate(
+	ctx context.Context,
+	chain *ethereum.Ethereum,
+	consensus string,
+	trustedHeight uint64,
+	height uint64,
+	mutate func(*mutableBesuHeader),
+) ([]byte, error) {
+	trusted, err := fetchLiveHeader(ctx, chain, consensus, trustedHeight)
+	if err != nil {
+		return nil, err
+	}
+	header, err := fetchLiveHeader(ctx, chain, consensus, height)
+	if err != nil {
+		return nil, err
+	}
+
+	headerRLP := header.HeaderRLP
+	if mutate != nil {
+		validatorKeys, err := loadBesuValidatorKeys()
+		if err != nil {
+			return nil, err
+		}
+		if headerRLP, err = resealWithQuorum(header.HeaderRLP, consensus, validatorKeys, mutate); err != nil {
+			return nil, err
+		}
+	}
+
+	// The light client expects abi.encode(MsgUpdateClient), without the function selector.
+	return besumsgs.NewBindings().PackUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
+		HeaderRlp:              headerRLP,
+		TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: trustedHeight},
+		ConsensusStatePreimage: trusted.consensusState(),
+	})[4:], nil
+}
+
 func buildConflictingFixture(
+	consensus string,
 	trustedHeight uint64,
 	targetHeight uint64,
 	baseHeader liveHeader,
 	validatorKeys map[ethcommon.Address]*ecdsa.PrivateKey,
 ) (besuRejectionUpdateFixture, error) {
-	mutable, err := decodeMutableQBFTHeader(baseHeader.HeaderRLP)
-	if err != nil {
-		return besuRejectionUpdateFixture{}, err
-	}
-	mutable.setHeight(targetHeight)
-	validators, err := mutable.validators()
-	if err != nil {
-		return besuRejectionUpdateFixture{}, err
-	}
-	signerKeys, err := signerKeysFor(validators[:3], validatorKeys)
-	if err != nil {
-		return besuRejectionUpdateFixture{}, err
-	}
-	mutable.setCommitSeals(signQBFTCommitSeals(mutable, signerKeys))
-	mutatedHeader, err := mutable.encode()
+	mutatedHeader, err := resealWithQuorum(baseHeader.HeaderRLP, consensus, validatorKeys, func(h *mutableBesuHeader) {
+		h.setHeight(targetHeight)
+	})
 	if err != nil {
 		return besuRejectionUpdateFixture{}, err
 	}
@@ -301,13 +390,40 @@ func buildConflictingFixture(
 	}, nil
 }
 
+// resealWithQuorum applies mutate to headerRLP and re-seals it with the keys of the first BFT quorum
+// (ceil(2n/3)) of the header's validators.
+func resealWithQuorum(
+	headerRLP []byte,
+	consensus string,
+	validatorKeys map[ethcommon.Address]*ecdsa.PrivateKey,
+	mutate func(*mutableBesuHeader),
+) ([]byte, error) {
+	mutable, err := decodeMutableBesuHeader(headerRLP, consensus)
+	if err != nil {
+		return nil, err
+	}
+	mutate(mutable)
+	validators, err := mutable.validators()
+	if err != nil {
+		return nil, err
+	}
+	quorum := (2*len(validators) + 2) / 3
+	signerKeys, err := signerKeysFor(validators[:quorum], validatorKeys)
+	if err != nil {
+		return nil, err
+	}
+	mutable.setCommitSeals(signBesuCommitSeals(mutable, signerKeys))
+	return mutable.encode()
+}
+
 func buildLowOverlapFixture(
+	consensus string,
 	trustedHeight uint64,
 	targetHeight uint64,
 	baseHeader liveHeader,
 	validatorKeys map[ethcommon.Address]*ecdsa.PrivateKey,
 ) (besuRejectionUpdateFixture, error) {
-	mutable, err := decodeMutableQBFTHeader(baseHeader.HeaderRLP)
+	mutable, err := decodeMutableBesuHeader(baseHeader.HeaderRLP, consensus)
 	if err != nil {
 		return besuRejectionUpdateFixture{}, err
 	}
@@ -344,7 +460,7 @@ func buildLowOverlapFixture(
 		return bytes.Compare(a[:], b[:])
 	})
 	mutable.setValidators(lowOverlapValidators)
-	mutable.setCommitSeals(signQBFTCommitSeals(mutable, signerKeys))
+	mutable.setCommitSeals(signBesuCommitSeals(mutable, signerKeys))
 	mutatedHeader, err := mutable.encode()
 	if err != nil {
 		return besuRejectionUpdateFixture{}, err
@@ -404,7 +520,7 @@ func buildNonMembershipFixture(
 	}, nil
 }
 
-func fetchLiveHeader(ctx context.Context, chain *ethereum.Ethereum, height uint64) (liveHeader, error) {
+func fetchLiveHeader(ctx context.Context, chain *ethereum.Ethereum, consensus string, height uint64) (liveHeader, error) {
 	header, err := chain.RPCClient.HeaderByNumber(ctx, newUint64(height))
 	if err != nil {
 		return liveHeader{}, fmt.Errorf("fetch header at height %d: %w", height, err)
@@ -413,9 +529,17 @@ func fetchLiveHeader(ctx context.Context, chain *ethereum.Ethereum, height uint6
 	if err != nil {
 		return liveHeader{}, fmt.Errorf("encode header rlp at height %d: %w", height, err)
 	}
-	mutable, err := decodeMutableQBFTHeader(headerRLP)
+	mutable, err := decodeMutableBesuHeader(headerRLP, consensus)
 	if err != nil {
 		return liveHeader{}, fmt.Errorf("decode header at height %d: %w", height, err)
+	}
+	// Besu does not order commit seals by signer, but the light client requires it.
+	if err := mutable.sortCommitSeals(); err != nil {
+		return liveHeader{}, fmt.Errorf("sort commit seals at height %d: %w", height, err)
+	}
+	headerRLP, err = mutable.encode()
+	if err != nil {
+		return liveHeader{}, fmt.Errorf("encode sorted header at height %d: %w", height, err)
 	}
 	validators, err := mutable.validators()
 	if err != nil {
@@ -427,6 +551,14 @@ func fetchLiveHeader(ctx context.Context, chain *ethereum.Ethereum, height uint6
 		HeaderRLP:  headerRLP,
 		Validators: validators,
 	}, nil
+}
+
+func (h liveHeader) consensusState() besumsgs.IBesuLightClientMsgsConsensusState {
+	return besumsgs.IBesuLightClientMsgsConsensusState{
+		Timestamp:  h.Header.Time,
+		StateRoot:  h.Header.Root,
+		Validators: h.Validators,
+	}
 }
 
 // fetchStorageProof returns the ABI-encoded storage proof nodes for the commitment at path and the
@@ -478,7 +610,7 @@ func packetCommitment(packet ics26router.IICS26RouterMsgsPacket) []byte {
 	})
 }
 
-func decodeMutableQBFTHeader(headerRLP []byte) (*mutableQBFTHeader, error) {
+func decodeMutableBesuHeader(headerRLP []byte, consensus string) (*mutableBesuHeader, error) {
 	var items []rlp.RawValue
 	if err := rlp.DecodeBytes(headerRLP, &items); err != nil {
 		return nil, err
@@ -497,10 +629,10 @@ func decodeMutableQBFTHeader(headerRLP []byte) (*mutableQBFTHeader, error) {
 	if len(extraItems) != 5 {
 		return nil, fmt.Errorf("expected 5 extraData items, got %d", len(extraItems))
 	}
-	return &mutableQBFTHeader{items: items, extraItems: extraItems}, nil
+	return &mutableBesuHeader{consensus: consensus, items: items, extraItems: extraItems}, nil
 }
 
-func (h *mutableQBFTHeader) encode() ([]byte, error) {
+func (h *mutableBesuHeader) encode() ([]byte, error) {
 	extraData, err := rlp.EncodeToBytes(h.extraItems)
 	if err != nil {
 		return nil, err
@@ -513,7 +645,7 @@ func (h *mutableQBFTHeader) encode() ([]byte, error) {
 	return rlp.EncodeToBytes(items)
 }
 
-func (h *mutableQBFTHeader) validators() ([]ethcommon.Address, error) {
+func (h *mutableBesuHeader) validators() ([]ethcommon.Address, error) {
 	var validators []ethcommon.Address
 	if err := rlp.DecodeBytes(h.extraItems[1], &validators); err != nil {
 		return nil, err
@@ -521,7 +653,7 @@ func (h *mutableQBFTHeader) validators() ([]ethcommon.Address, error) {
 	return validators, nil
 }
 
-func (h *mutableQBFTHeader) commitSeals() ([][]byte, error) {
+func (h *mutableBesuHeader) commitSeals() ([][]byte, error) {
 	var seals [][]byte
 	if err := rlp.DecodeBytes(h.extraItems[4], &seals); err != nil {
 		return nil, err
@@ -529,23 +661,60 @@ func (h *mutableQBFTHeader) commitSeals() ([][]byte, error) {
 	return seals, nil
 }
 
-func (h *mutableQBFTHeader) setHeight(height uint64) {
+func (h *mutableBesuHeader) setHeight(height uint64) {
 	h.items[8] = mustRLP(height)
 }
 
-func (h *mutableQBFTHeader) setValidators(validators []ethcommon.Address) {
+func (h *mutableBesuHeader) setStateRoot(stateRoot ethcommon.Hash) {
+	h.items[3] = mustRLP(stateRoot)
+}
+
+func (h *mutableBesuHeader) setTimestamp(timestamp uint64) {
+	h.items[11] = mustRLP(timestamp)
+}
+
+func (h *mutableBesuHeader) setValidators(validators []ethcommon.Address) {
 	h.extraItems[1] = mustRLP(validators)
 }
 
-func (h *mutableQBFTHeader) setCommitSeals(seals [][]byte) {
+func (h *mutableBesuHeader) setCommitSeals(seals [][]byte) {
 	h.extraItems[4] = mustRLP(seals)
 }
 
-func signQBFTCommitSeals(header *mutableQBFTHeader, keys []*ecdsa.PrivateKey) [][]byte {
+// sortCommitSeals orders the commit seals by recovered signer address, as the light client requires.
+func (h *mutableBesuHeader) sortCommitSeals() error {
+	seals, err := h.commitSeals()
+	if err != nil {
+		return err
+	}
+	digest := h.commitSealDigest()
+	signers := make(map[string]ethcommon.Address, len(seals))
+	for _, seal := range seals {
+		pubkey, err := crypto.SigToPub(digest.Bytes(), seal)
+		if err != nil {
+			return err
+		}
+		signers[string(seal)] = crypto.PubkeyToAddress(*pubkey)
+	}
+	slices.SortFunc(seals, func(a, b []byte) int {
+		signerA, signerB := signers[string(a)], signers[string(b)]
+		return bytes.Compare(signerA[:], signerB[:])
+	})
+	h.setCommitSeals(seals)
+	return nil
+}
+
+func signBesuCommitSeals(header *mutableBesuHeader, keys []*ecdsa.PrivateKey) [][]byte {
 	return signCommitSeals(header.commitSealDigest(), keys)
 }
 
+// signCommitSeals signs digest with every key, ordering the seals by signer address as the light client requires.
 func signCommitSeals(digest ethcommon.Hash, keys []*ecdsa.PrivateKey) [][]byte {
+	keys = slices.Clone(keys)
+	slices.SortFunc(keys, func(a, b *ecdsa.PrivateKey) int {
+		signerA, signerB := crypto.PubkeyToAddress(a.PublicKey), crypto.PubkeyToAddress(b.PublicKey)
+		return bytes.Compare(signerA[:], signerB[:])
+	})
 	seals := make([][]byte, len(keys))
 	for i, key := range keys {
 		seal, err := crypto.Sign(digest.Bytes(), key)
@@ -557,9 +726,14 @@ func signCommitSeals(digest ethcommon.Hash, keys []*ecdsa.PrivateKey) [][]byte {
 	return seals
 }
 
-func (h *mutableQBFTHeader) commitSealDigest() ethcommon.Hash {
+// commitSealDigest is the hash validators sign. QBFT signs an empty seal list, whereas IBFT2 omits the seal field.
+func (h *mutableBesuHeader) commitSealDigest() ethcommon.Hash {
 	signingExtraItems := cloneRawValues(h.extraItems)
-	signingExtraItems[4] = rlp.RawValue{0xc0}
+	if h.consensus == testvalues.BesuConsensusIBFT2 {
+		signingExtraItems = signingExtraItems[:4]
+	} else {
+		signingExtraItems[4] = rlp.RawValue{0xc0}
+	}
 	signingExtraData, err := rlp.EncodeToBytes(signingExtraItems)
 	if err != nil {
 		panic(err)
@@ -577,12 +751,12 @@ func (h *mutableQBFTHeader) commitSealDigest() ethcommon.Hash {
 	return crypto.Keccak256Hash(payload)
 }
 
-func loadQBFTValidatorKeys() (map[ethcommon.Address]*ecdsa.PrivateKey, error) {
+func loadBesuValidatorKeys() (map[ethcommon.Address]*ecdsa.PrivateKey, error) {
 	validatorKeyPaths := []string{
-		"e2e/interchaintestv8/chainconfig/testdata/besu/qbft/keys/validator1/key",
-		"e2e/interchaintestv8/chainconfig/testdata/besu/qbft/keys/validator2/key",
-		"e2e/interchaintestv8/chainconfig/testdata/besu/qbft/keys/validator3/key",
-		"e2e/interchaintestv8/chainconfig/testdata/besu/qbft/keys/validator4/key",
+		"e2e/interchaintestv8/chainconfig/testdata/besu/keys/validator1/key",
+		"e2e/interchaintestv8/chainconfig/testdata/besu/keys/validator2/key",
+		"e2e/interchaintestv8/chainconfig/testdata/besu/keys/validator3/key",
+		"e2e/interchaintestv8/chainconfig/testdata/besu/keys/validator4/key",
 	}
 
 	keys := make(map[ethcommon.Address]*ecdsa.PrivateKey, len(validatorKeyPaths))

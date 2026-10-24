@@ -6,6 +6,24 @@ import { ILightClient } from "../../../interfaces/ILightClient.sol";
 /// @title IBesuLightClient
 /// @notice Interface for Besu BFT light clients.
 interface IBesuLightClient is ILightClient {
+    /// @notice Emitted when two validly signed headers commit different consensus states at the same height.
+    /// @dev The client is permanently frozen when this is emitted.
+    /// @param revisionHeight The height at which the double sign occurred.
+    /// @param consensusStateHash1 The first consensus state hash: the one stored at `revisionHeight` for
+    /// `updateClient`, or the one derived from the first header of a `MsgHeadersMisbehaviour`.
+    /// @param consensusStateHash2 The second consensus state hash: the one derived from the submitted header for
+    /// `updateClient`, or from the second header of a `MsgHeadersMisbehaviour`.
+    event DoubleSign(uint64 indexed revisionHeight, bytes32 consensusStateHash1, bytes32 consensusStateHash2);
+
+    /// @notice Emitted when a time monotonicity violation is detected between two validly signed headers.
+    /// @dev The client is permanently frozen when this is emitted.
+    /// @param height2 The height of the second trusted consensus state.
+    /// @param height1 The height of the first trusted consensus state. Less than `height2`.
+    /// @param timestamp2 The timestamp of the second trusted consensus state.
+    /// @param timestamp1 The timestamp of the first trusted consensus state.
+    // solhint-disable-next-line gas-indexed-events
+    event TimeNonMonotonicity(uint64 indexed height2, uint64 height1, uint64 timestamp2, uint64 timestamp1);
+
     /// @notice Returns the stored consensus state hash at a revision height.
     /// @dev The hash is `keccak256(abi.encode(IBesuLightClientMsgs.ConsensusState))`.
     /// Reverts with `ConsensusStateNotFound` if no consensus state is stored at the height.

@@ -20,6 +20,8 @@ All contracts are compiled for the **Cancun** EVM (`evm_version = "cancun"` in `
 - `IBCRolesLib.sol` – Shared role ids and selector lists for access-managed permissions across ICS20/ICS26/ICS02.
 - `IBCSenderCallbacksLib.sol`, `IBCCallbackReceiver.sol` – Helpers for standardized callback interfaces used by apps.
 - `RateLimitUpgradeable.sol` – Reusable per-token, per-day rate limiting mixin used by escrow.
+- `IFTRateLimitUpgradeable.sol` – Refilling-bucket rate limiting mixin for IFT built on OpenZeppelin's `RateLimiter`, with one limiter keyed by direction so inbound (mint) and outbound (burn) share a capacity and window but track usage independently.
+- `IBCMulticall.sol` – UUPS, AccessManaged batcher for relayers in the style of Multicall3 `aggregate3`. Each call sets `allowFailure`. A failing call that is allowed to fail is rolled back and reported with `CallFailed`, so the rest of the batch still lands and the failed packet stays retryable. A failing call that is not allowed to fail reverts the batch with its own error. A call that is allowed to fail but fails like the router does when it runs out of gas (empty revert data or `IBCFailedCallback`) reverts the batch with `IBCMulticallCallOutOfGas`, so a batch that is short on gas never lands with packets dropped. It sits outside IBC core: map `multicall` to `RELAYER_ROLE` and grant the contract `RELAYER_ROLE` (`DeployAccessManagerWithRoles.accessManagerSetMulticallRoles`). Apps then see the multicall contract as the relayer.
 - `RelayerHelper.sol` – Read-only helper for relayers to query packet commitments, receipts, and successful acknowledgements from `ICS26Router`.
 
 ## Light clients (`light-clients/`)
@@ -33,20 +35,24 @@ All contracts are compiled for the **Cancun** EVM (`evm_version = "cancun"` in `
 - Supported: Besu **IBFT 2.0** and **QBFT** in **header-validator mode**.
 - Verification model: weak subjectivity via **trusting period** and validator-set overlap checks.
 - Commit-seal verification: follows the existing **YUI Solidity client + besu-ibc-relay-prover** sealing-header reconstruction model.
-- Trusted overlap threshold: requires **`ceil(2n / 3)`** of the trusted validator set to have signed the new header (the same threshold as Besu commit-seal quorum), which is intentionally stricter than the current upstream YUI check.
+- Trusted overlap threshold: requires at least **`ceil(n * trustLevel)`** of the trusted validator set to have signed the new header, where `trustLevel` is configured at deployment within `[1/3, 1]` (the proof-api defaults to `2/3`, the same threshold as Besu commit-seal quorum). Commit-seal quorum stays at **`ceil(2n / 3)`**. See `light-clients/besu/README.md`.
 - Proof surface: Besu block headers, commit seals, Ethereum account proofs, and Ethereum storage proofs.
 - Destination chain requirement: the chain hosting the client must have Cancun (EIP-1153 transient storage) enabled; the proven router storage root is cached in transient storage so a batch of packet proofs at one height pays for a single account proof. See `light-clients/besu/README.md`.
 - Counterparty storage model: Eureka `ICS26Router` / `IBCStoreUpgradeable` commitments mapping.
-- Not supported in v1: QBFT validator-contract mode, mode transitions, and misbehaviour handling.
-- Current fixture status: `test/besu-bft/fixtures/` are synthetic regression fixtures; real Besu-derived golden fixtures remain a follow-up interoperability-confidence improvement.
+- Misbehaviour: a double sign or time non-monotonicity permanently freezes the client. `updateClient` detects both against the trusted and stored consensus states. `misbehaviour(bytes)` is permissionless and accepts either two stored consensus states with non-monotonic timestamps or two validly signed headers proving a double sign or time non-monotonicity. See `light-clients/besu/README.md`.
+- Not supported in v1: QBFT validator-contract mode and mode transitions.
+- Fixture status: `test/besu-bft/fixtures/qbft.json` and `ibft2.json` are captured from live Besu QBFT and IBFT2 networks by the Besu↔Besu e2e suite; only their negative update cases are derived by off-chain header mutation.
 
 ## Interchain Fungible Tokens (IFT)
-- Code reference: find the  `contracts` IFT contract code [here](https://github.com/cosmos/solidity-ibc-eureka/tree/mariuszzak/ift/contracts).
+- Code reference: find the  `contracts` IFT contract code [here](https://github.com/cosmos/ibc-contracts/tree/mariuszzak/ift/contracts).
 - IFT is an issuer-controlled ERC20 that bridges via ICS27-GMP instead of ICS20. The abstract `IFTBase` burns on send, constructs a mint call for the counterparty IFT, and tracks pending transfers keyed by (clientId, sequence).
 - Bridges: `registerIFTBridge` configures a counterparty IFT contract per IBC client along with an `IIFTSendCallConstructor` helper to encode the mint call for that chain.
 - Sending: `iftTransfer` burns locally, builds ICS27 `SendCall` to the remote IFT, records `PendingTransfer`, and emits initiation events; default timeout is 15 minutes if not provided.
 - Receiving: `iftMint` is callable only by the ICS27-controlled account; it mints locally after verifying the counterparty sender matches the registered bridge and clears pending transfers on ack/timeout callbacks to refund/mint as appropriate.
+- Rate limits: `setIFTRateLimit` configures a single capacity and refill window shared by both directions, each of which tracks its own usage. Limits are mandatory (until set, every transfer is rejected), shared across all bridges of the token, and never restored by flow in the opposite direction; refunds of pending transfers consume inbound allowance like any other mint. See the [ADR](../../docs/adr/solidity/ift-ratelimit.md).
 - Extensibility: implement concrete ERC20 constructors and different `IIFTSendCallConstructor` variants for EVM vs Cosmos SDK token factory flows; access is governed by `AccessManaged` authority roles.
+- Hooks: inheriters can override the no-op `_beforeIFTTransfer` (outbound burn), `_beforeIFTMint` (inbound mint) and `_beforeIFTRefund` (refund after an error ack or timeout) hooks to add bridge policy such as per-client limits or receiver allowlists. Each hook receives the IBC client ID and runs after the built-in validation but before any rate limit usage, balance change or pending transfer update, so reverting aborts the flow cleanly. A reverting mint hook makes ICS27-GMP write an error acknowledgement, which refunds the sender on the counterparty chain. This holds for any revert, including a bare `revert()`, since the ICS27 account reports empty revert data as `FailedCall`; only running the relay out of gas fails it instead. A reverting refund hook leaves the transfer pending and the ack or timeout retryable, but a hook that never stops reverting locks those funds.
+- Pausing: `IFTOwnable`, `IFTOwnable2Step` and `IFTAccessManaged` implement `IPausable` on top of these hooks. While paused, `iftTransfer` reverts, `iftMint` reverts so ICS27-GMP writes an error acknowledgement, and refunds revert so the ack or timeout stays pending and can be relayed again after unpausing. Admin functions, the issuer's `mint` and local token transfers stay available. In `IFTAccessManaged`, map `pause` and `unpause` to `PAUSER_ROLE` and `UNPAUSER_ROLE` with `IBCRolesLib`. See the [ADR](../../docs/adr/solidity/pausability.md).
 
 ## Interfaces, errors, and message shapes
 - `interfaces/` – External interfaces for apps, light clients, stores, rate limiting, pausing, and callbacks.

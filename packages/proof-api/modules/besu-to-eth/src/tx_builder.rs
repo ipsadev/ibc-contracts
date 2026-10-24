@@ -9,7 +9,7 @@ use std::{
 use alloy::{
     consensus::Header,
     network::Ethereum,
-    primitives::{hex, Address, Bytes, B256, U256},
+    primitives::{hex, keccak256, Address, Bytes, Signature, B256, U256},
     providers::{Provider, RootProvider},
     rpc::types::{EIP1186AccountProofResponse, EIP1186StorageProof},
     sol_types::{SolCall, SolValue},
@@ -19,8 +19,9 @@ use ethereum_apis::eth_api::client::EthApiClient;
 use ethereum_light_client::membership::evm_ics26_commitment_path;
 use ibc_eureka_solidity_types::{
     besu::{besu_ibft2_light_client, besu_qbft_light_client},
+    ibc_multicall::multicall_calldata,
     ics26::{
-        router::{multicallCall, routerCalls, routerInstance, updateClientCall},
+        router::{routerCalls, routerInstance, updateClientCall},
         IICS02ClientMsgs::Height as RouterHeight,
         ICS26_IBC_STORAGE_SLOT,
     },
@@ -30,7 +31,7 @@ use proof_api_lib::utils::{
     eth_eureka::{src_events_to_recv_and_ack_msgs, target_events_to_timeout_msgs},
     RelayEventsParams,
 };
-use rlp::Rlp;
+use rlp::{Rlp, RlpStream};
 
 use crate::BesuConsensusType;
 
@@ -45,12 +46,14 @@ pub struct TxBuilder {
 struct CreateClientParams {
     trusting_period: u64,
     max_clock_drift: u64,
+    trust_level: IBesuLightClientMsgs::TrustThreshold,
     trusted_height: Option<u64>,
     role_manager: Address,
 }
 
 const TRUSTING_PERIOD: &str = "trusting_period";
 const MAX_CLOCK_DRIFT: &str = "max_clock_drift";
+const TRUST_LEVEL: &str = "trust_level";
 const TRUSTED_HEIGHT: &str = "trusted_height";
 const ROLE_MANAGER: &str = "role_manager";
 
@@ -91,13 +94,25 @@ impl TxBuilder {
         let calldata = match self.consensus_type {
             BesuConsensusType::Qbft => besu_qbft_light_client::BesuQBFTLightClient::deploy_builder(
                 self.dst_provider.clone(),
-                *self.src_ics26_router.address(),
-                trusted_height,
-                trusted_state.timestamp,
-                trusted_state.stateRoot,
-                trusted_state.validators,
-                params.trusting_period,
-                params.max_clock_drift,
+                besu_qbft_light_client::IBesuLightClientMsgs::ClientState {
+                    ibcRouter: *self.src_ics26_router.address(),
+                    latestHeight: besu_qbft_light_client::IICS02ClientMsgs::Height {
+                        revisionNumber: 0,
+                        revisionHeight: trusted_height,
+                    },
+                    trustingPeriod: params.trusting_period,
+                    maxClockDrift: params.max_clock_drift,
+                    isFrozen: false,
+                    trustLevel: besu_qbft_light_client::IBesuLightClientMsgs::TrustThreshold {
+                        numerator: params.trust_level.numerator,
+                        denominator: params.trust_level.denominator,
+                    },
+                },
+                besu_qbft_light_client::IBesuLightClientMsgs::ConsensusState {
+                    timestamp: trusted_state.timestamp,
+                    stateRoot: trusted_state.stateRoot,
+                    validators: trusted_state.validators,
+                },
                 params.role_manager,
             )
             .calldata()
@@ -105,13 +120,25 @@ impl TxBuilder {
             BesuConsensusType::Ibft2 => {
                 besu_ibft2_light_client::BesuIBFT2LightClient::deploy_builder(
                     self.dst_provider.clone(),
-                    *self.src_ics26_router.address(),
-                    trusted_height,
-                    trusted_state.timestamp,
-                    trusted_state.stateRoot,
-                    trusted_state.validators,
-                    params.trusting_period,
-                    params.max_clock_drift,
+                    besu_ibft2_light_client::IBesuLightClientMsgs::ClientState {
+                        ibcRouter: *self.src_ics26_router.address(),
+                        latestHeight: besu_ibft2_light_client::IICS02ClientMsgs::Height {
+                            revisionNumber: 0,
+                            revisionHeight: trusted_height,
+                        },
+                        trustingPeriod: params.trusting_period,
+                        maxClockDrift: params.max_clock_drift,
+                        isFrozen: false,
+                        trustLevel: besu_ibft2_light_client::IBesuLightClientMsgs::TrustThreshold {
+                            numerator: params.trust_level.numerator,
+                            denominator: params.trust_level.denominator,
+                        },
+                    },
+                    besu_ibft2_light_client::IBesuLightClientMsgs::ConsensusState {
+                        timestamp: trusted_state.timestamp,
+                        stateRoot: trusted_state.stateRoot,
+                        validators: trusted_state.validators,
+                    },
                     params.role_manager,
                 )
                 .calldata()
@@ -129,15 +156,26 @@ impl TxBuilder {
             .get_block_number()
             .await
             .context("failed to fetch latest source block number")?;
+        ensure!(
+            needs_update(trusted_height, target_height)?,
+            "client {dst_client_id} is already at the latest source height {target_height}"
+        );
 
         let trusted_state = consensus_state(&self.fetch_source_header(trusted_height).await?)?;
         let target_header = self.fetch_source_header(target_height).await?;
 
-        Ok(Self::build_update_client_calldata(
+        let update_call = Self::build_update_client_calldata(
             dst_client_id,
             trusted_height,
             trusted_state,
             &target_header,
+            self.consensus_type,
+        )?;
+
+        Ok(multicall_calldata(
+            *self.dst_ics26_router.address(),
+            [update_call.into()],
+            1,
         ))
     }
 
@@ -201,11 +239,6 @@ impl TxBuilder {
             bail!("no packets collected")
         }
 
-        let trusted_height = self
-            .fetch_destination_trusted_height(&params.dst_client_id)
-            .await?;
-        let trusted_state = consensus_state(&self.fetch_source_header(trusted_height).await?)?;
-
         let storage_keys = packet_calls
             .iter()
             .map(packet_storage_key)
@@ -230,23 +263,52 @@ impl TxBuilder {
             &consensus_state(&header)?,
         )?;
 
-        let update_call = Self::build_update_client_calldata(
-            &params.dst_client_id,
+        let update_call = self
+            .update_client_calldata_if_needed(&params.dst_client_id, &header)
+            .await?
+            .map(Bytes::from);
+        // The update and the first packet call, which carries the account proof that the
+        // remaining calls rely on, must succeed. Every other packet call is allowed to fail.
+        let strict_calls = usize::from(update_call.is_some()) + 1;
+        let all_calls =
+            update_call
+                .into_iter()
+                .chain(packet_calls.into_iter().map(|call| match call {
+                    routerCalls::ackPacket(call) => call.abi_encode().into(),
+                    routerCalls::recvPacket(call) => call.abi_encode().into(),
+                    routerCalls::timeoutPacket(call) => call.abi_encode().into(),
+                    _ => unreachable!("only recv, ack, and timeout calls are constructed"),
+                }));
+
+        Ok(multicall_calldata(
+            *self.dst_ics26_router.address(),
+            all_calls,
+            strict_calls,
+        ))
+    }
+
+    /// Builds the update from the destination client's trusted height to `target_header`, or
+    /// returns `None` when the client already trusts that height.
+    async fn update_client_calldata_if_needed(
+        &self,
+        dst_client_id: &str,
+        target_header: &Header,
+    ) -> Result<Option<Vec<u8>>> {
+        let trusted_height = self.fetch_destination_trusted_height(dst_client_id).await?;
+        if !needs_update(trusted_height, target_header.number)? {
+            tracing::info!("Client already at height {trusted_height}, skipping update");
+            return Ok(None);
+        }
+
+        let trusted_state = consensus_state(&self.fetch_source_header(trusted_height).await?)?;
+        Self::build_update_client_calldata(
+            dst_client_id,
             trusted_height,
             trusted_state,
-            &header,
-        );
-
-        let all_calls: Vec<Bytes> = std::iter::once(update_call.into())
-            .chain(packet_calls.into_iter().map(|call| match call {
-                routerCalls::ackPacket(call) => call.abi_encode().into(),
-                routerCalls::recvPacket(call) => call.abi_encode().into(),
-                routerCalls::timeoutPacket(call) => call.abi_encode().into(),
-                _ => unreachable!("only recv, ack, and timeout calls are constructed"),
-            }))
-            .collect();
-
-        Ok(multicallCall { data: all_calls }.abi_encode())
+            target_header,
+            self.consensus_type,
+        )
+        .map(Some)
     }
 
     fn build_update_client_calldata(
@@ -254,9 +316,17 @@ impl TxBuilder {
         trusted_height: u64,
         trusted_state: IBesuLightClientMsgs::ConsensusState,
         target_header: &Header,
-    ) -> Vec<u8> {
+        consensus_type: BesuConsensusType,
+    ) -> Result<Vec<u8>> {
+        let target_header =
+            sort_commit_seals(target_header, consensus_type).with_context(|| {
+                format!(
+                    "failed to sort commit seals of source block {}",
+                    target_header.number
+                )
+            })?;
         let update_msg = IBesuLightClientMsgs::MsgUpdateClient {
-            headerRlp: alloy_rlp::encode(target_header).into(),
+            headerRlp: alloy_rlp::encode(&target_header).into(),
             trustedHeight: MsgHeight {
                 revisionNumber: 0,
                 revisionHeight: trusted_height,
@@ -264,11 +334,11 @@ impl TxBuilder {
             consensusStatePreimage: trusted_state,
         };
 
-        updateClientCall {
+        Ok(updateClientCall {
             clientId: dst_client_id.to_string(),
             updateMsg: update_msg.abi_encode().into(),
         }
-        .abi_encode()
+        .abi_encode())
     }
 
     async fn fetch_source_header(&self, block_height: u64) -> Result<Header> {
@@ -321,6 +391,19 @@ impl TxBuilder {
                 format!("failed to decode destination client state for {dst_client_id}")
             })
     }
+}
+
+/// Whether the destination client must be updated before proving at `proof_height`.
+///
+/// The light client requires an update header strictly above its trusted height, so an update is
+/// only built once the source has advanced past it. At equal heights the client already stores
+/// the consensus state proofs are verified against.
+fn needs_update(trusted_height: u64, proof_height: u64) -> Result<bool> {
+    ensure!(
+        proof_height >= trusted_height,
+        "destination client trusts height {trusted_height}, ahead of the latest source block {proof_height}; retry once the source node catches up"
+    );
+    Ok(proof_height > trusted_height)
 }
 
 /// Rebuilds the consensus state the light client derives from a source header.
@@ -415,9 +498,10 @@ fn retain_provable_packet_calls(
 /// proof nodes for the packet's commitment slot with the consensus state they are verified against.
 ///
 /// The router account proof is only attached to the first call. All calls share the same proof
-/// height and execute in a single atomic multicall, so the light client verifies the account proof
-/// once, caches the storage root in transient storage, and serves the remaining calls from that
-/// cache when their `accountProofNodes` are empty.
+/// height and execute in a single multicall, so the light client verifies the account proof once,
+/// caches the storage root in transient storage, and serves the remaining calls from that cache
+/// when their `accountProofNodes` are empty. The first call is not allowed to fail, so the cache is
+/// always set before the remaining calls run.
 fn attach_packet_proofs(
     packet_calls: &mut [routerCalls],
     account_proof: &[Bytes],
@@ -488,12 +572,18 @@ fn parse_create_client_params(parameters: &HashMap<String, String>) -> Result<Cr
     parameters
         .keys()
         .find(|key| {
-            ![TRUSTING_PERIOD, MAX_CLOCK_DRIFT, TRUSTED_HEIGHT, ROLE_MANAGER]
-                .contains(&key.as_str())
+            ![
+                TRUSTING_PERIOD,
+                MAX_CLOCK_DRIFT,
+                TRUST_LEVEL,
+                TRUSTED_HEIGHT,
+                ROLE_MANAGER,
+            ]
+            .contains(&key.as_str())
         })
         .map_or(Ok(()), |key| {
             Err(anyhow!(
-                "unexpected parameter `{key}`, only `{TRUSTING_PERIOD}`, `{MAX_CLOCK_DRIFT}`, `{TRUSTED_HEIGHT}`, and `{ROLE_MANAGER}` are allowed"
+                "unexpected parameter `{key}`, only `{TRUSTING_PERIOD}`, `{MAX_CLOCK_DRIFT}`, `{TRUST_LEVEL}`, `{TRUSTED_HEIGHT}`, and `{ROLE_MANAGER}` are allowed"
             ))
         })?;
 
@@ -508,6 +598,9 @@ fn parse_create_client_params(parameters: &HashMap<String, String>) -> Result<Cr
             .ok_or_else(|| anyhow!("missing `{MAX_CLOCK_DRIFT}` parameter"))?
             .parse()
             .with_context(|| format!("failed to parse `{MAX_CLOCK_DRIFT}` as decimal seconds"))?,
+        trust_level: parameters
+            .get(TRUST_LEVEL)
+            .map_or(Ok(DEFAULT_TRUST_LEVEL), |value| parse_trust_level(value))?,
         trusted_height: parameters
             .get(TRUSTED_HEIGHT)
             .map(|value| {
@@ -522,6 +615,38 @@ fn parse_create_client_params(parameters: &HashMap<String, String>) -> Result<Cr
                 Address::from_str(value)
                     .with_context(|| format!("failed to parse `{ROLE_MANAGER}` as hex address"))
             })?,
+    })
+}
+
+/// Default trust level, matching the `ceil(2n / 3)` commit-seal quorum.
+const DEFAULT_TRUST_LEVEL: IBesuLightClientMsgs::TrustThreshold =
+    IBesuLightClientMsgs::TrustThreshold {
+        numerator: 2,
+        denominator: 3,
+    };
+
+/// Parses a `<numerator>/<denominator>` trust level and checks that it is within `[1/3, 1]`.
+fn parse_trust_level(value: &str) -> Result<IBesuLightClientMsgs::TrustThreshold> {
+    let (numerator, denominator) = value
+        .split_once('/')
+        .and_then(|(numerator, denominator)| {
+            Some((
+                numerator.trim().parse::<u8>().ok()?,
+                denominator.trim().parse::<u8>().ok()?,
+            ))
+        })
+        .with_context(|| {
+            format!("failed to parse `{TRUST_LEVEL}` as `<numerator>/<denominator>`: {value}")
+        })?;
+    ensure!(
+        denominator != 0
+            && numerator <= denominator
+            && 3 * u16::from(numerator) >= u16::from(denominator),
+        "`{TRUST_LEVEL}` must be within [1/3, 1], got {numerator}/{denominator}"
+    );
+    Ok(IBesuLightClientMsgs::TrustThreshold {
+        numerator,
+        denominator,
     })
 }
 
@@ -547,17 +672,85 @@ fn extract_validators_from_extra_data(extra_data: &[u8]) -> Result<Vec<Address>>
     Ok(out)
 }
 
+/// Returns a copy of `header` with its commit seals ordered by recovered signer address.
+///
+/// The light client requires commit seals in strictly ascending signer order, but Besu does not
+/// order them that way. Reordering keeps the header valid because the commit-seal digest excludes
+/// the seal list.
+fn sort_commit_seals(header: &Header, consensus_type: BesuConsensusType) -> Result<Header> {
+    let extra_data = Rlp::new(&header.extra_data);
+    let item_count = extra_data
+        .item_count()
+        .context("failed to decode extraData")?;
+    ensure!(
+        item_count == 5,
+        "expected 5 extraData items, got {item_count}"
+    );
+    let prefix = (0..4)
+        .map(|i| extra_data.at(i).map(|item| item.as_raw().to_vec()))
+        .collect::<Result<Vec<_>, _>>()
+        .context("failed to decode extraData items")?;
+    let seals: Vec<Vec<u8>> = extra_data
+        .list_at(4)
+        .context("failed to decode commit seals")?;
+
+    let encode_extra_data = |seals: Option<&[Vec<u8>]>| {
+        let mut stream = RlpStream::new_list(4 + usize::from(seals.is_some()));
+        for item in &prefix {
+            stream.append_raw(item, 1);
+        }
+        if let Some(seals) = seals {
+            stream.begin_list(seals.len());
+            for seal in seals {
+                stream.append(seal);
+            }
+        }
+        Bytes::from(stream.out().to_vec())
+    };
+
+    // QBFT signs the header with an empty seal list, IBFT2 with the seal list dropped.
+    let mut signing_header = header.clone();
+    signing_header.extra_data = match consensus_type {
+        BesuConsensusType::Qbft => encode_extra_data(Some(&[])),
+        BesuConsensusType::Ibft2 => encode_extra_data(None),
+    };
+    let digest = keccak256(alloy_rlp::encode(&signing_header));
+
+    let mut signed_seals = seals
+        .into_iter()
+        .map(|seal| {
+            let signer = Signature::from_raw(&seal)
+                .and_then(|signature| signature.recover_address_from_prehash(&digest))
+                .context("failed to recover commit seal signer")?;
+            Ok((signer, seal))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    signed_seals.sort_by_key(|(signer, _)| *signer);
+    if let Some(pair) = signed_seals.windows(2).find(|pair| pair[0].0 == pair[1].0) {
+        bail!("duplicate commit seal signer {}", pair[0].0);
+    }
+
+    let sorted_seals: Vec<_> = signed_seals.into_iter().map(|(_, seal)| seal).collect();
+    let mut sorted_header = header.clone();
+    sorted_header.extra_data = encode_extra_data(Some(&sorted_seals));
+    Ok(sorted_header)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 
     use super::{
-        attach_packet_proofs, map_storage_proofs, packet_storage_key, retain_provable_packet_calls,
-        StorageSlotProof,
+        attach_packet_proofs, map_storage_proofs, needs_update, packet_storage_key,
+        parse_create_client_params, retain_provable_packet_calls, sort_commit_seals,
+        StorageSlotProof, TRUST_LEVEL,
     };
+    use crate::BesuConsensusType;
     use alloy::{
-        primitives::{Address, Bytes, B256, U256},
+        consensus::Header,
+        primitives::{keccak256, Address, Bytes, Signature, B256, U256},
         rpc::types::EIP1186StorageProof,
+        signers::{local::PrivateKeySigner, SignerSync},
         sol_types::SolValue,
     };
     use ibc_eureka_solidity_types::{
@@ -568,6 +761,7 @@ mod tests {
         },
         msgs::IBesuLightClientMsgs,
     };
+    use rlp::{Rlp, RlpStream};
 
     fn packet(sequence: u64) -> Packet {
         Packet {
@@ -822,5 +1016,129 @@ mod tests {
             decode_recv_proof(&calls[0]).accountProofNodes,
             account_nodes
         );
+    }
+
+    #[test]
+    fn needs_update_only_when_source_is_ahead() {
+        assert!(needs_update(10, 11).unwrap());
+        assert!(!needs_update(10, 10).unwrap());
+        assert!(needs_update(10, 9).is_err());
+    }
+
+    #[test]
+    fn create_client_params_trust_level() {
+        let params = |trust_level: Option<&str>| {
+            let mut params = HashMap::from([
+                ("trusting_period".to_string(), "1000".to_string()),
+                ("max_clock_drift".to_string(), "10".to_string()),
+            ]);
+            if let Some(trust_level) = trust_level {
+                params.insert(TRUST_LEVEL.to_string(), trust_level.to_string());
+            }
+            parse_create_client_params(&params)
+                .map(|params| (params.trust_level.numerator, params.trust_level.denominator))
+        };
+
+        assert_eq!(params(None).unwrap(), (2, 3));
+        assert_eq!(params(Some("1/3")).unwrap(), (1, 3));
+        assert_eq!(params(Some("1/1")).unwrap(), (1, 1));
+        for invalid in ["", "2", "2/", "a/3", "1/0", "0/0", "1/4", "4/3", "256/256"] {
+            assert!(
+                params(Some(invalid)).is_err(),
+                "{invalid} should be rejected"
+            );
+        }
+    }
+
+    fn besu_extra_data(validators: &[Address], seals: Option<&[Vec<u8>]>) -> Bytes {
+        let mut stream = RlpStream::new_list(4 + usize::from(seals.is_some()));
+        stream.append(&vec![0u8; 32]);
+        stream.begin_list(validators.len());
+        for validator in validators {
+            stream.append(&validator.as_slice());
+        }
+        stream.begin_list(0);
+        stream.append(&vec![0u8; 4]);
+        if let Some(seals) = seals {
+            stream.begin_list(seals.len());
+            for seal in seals {
+                stream.append(seal);
+            }
+        }
+        Bytes::from(stream.out().to_vec())
+    }
+
+    /// Returns a header sealed by `signers` in the given order, and the commit-seal digest.
+    fn sealed_header(
+        consensus_type: BesuConsensusType,
+        signers: &[&PrivateKeySigner],
+    ) -> (Header, B256) {
+        let mut validators: Vec<_> = signers.iter().map(|signer| signer.address()).collect();
+        validators.sort();
+        let mut header = Header {
+            number: 7,
+            extra_data: besu_extra_data(
+                &validators,
+                matches!(consensus_type, BesuConsensusType::Qbft).then_some(&[]),
+            ),
+            ..Header::default()
+        };
+        let digest = keccak256(alloy_rlp::encode(&header));
+        let seals: Vec<_> = signers
+            .iter()
+            .map(|signer| signer.sign_hash_sync(&digest).unwrap().as_bytes().to_vec())
+            .collect();
+        header.extra_data = besu_extra_data(&validators, Some(&seals));
+        (header, digest)
+    }
+
+    #[test]
+    fn sort_commit_seals_orders_seals_by_signer() {
+        let signers: Vec<_> = (0..4).map(|_| PrivateKeySigner::random()).collect();
+        let mut unsorted: Vec<_> = signers.iter().collect();
+        unsorted.sort_by_key(|signer| std::cmp::Reverse(signer.address()));
+
+        for consensus_type in [BesuConsensusType::Qbft, BesuConsensusType::Ibft2] {
+            let (header, digest) = sealed_header(consensus_type, &unsorted);
+            let sorted = sort_commit_seals(&header, consensus_type).unwrap();
+
+            let extra_data = Rlp::new(&sorted.extra_data);
+            let original = Rlp::new(&header.extra_data);
+            for i in 0..4 {
+                assert_eq!(
+                    extra_data.at(i).unwrap().as_raw(),
+                    original.at(i).unwrap().as_raw()
+                );
+            }
+            let recovered: Vec<_> = extra_data
+                .list_at::<Vec<u8>>(4)
+                .unwrap()
+                .iter()
+                .map(|seal| {
+                    Signature::from_raw(seal)
+                        .unwrap()
+                        .recover_address_from_prehash(&digest)
+                        .unwrap()
+                })
+                .collect();
+            let mut expected: Vec<_> = signers.iter().map(PrivateKeySigner::address).collect();
+            expected.sort();
+            assert_eq!(recovered, expected);
+            assert_eq!(
+                Header {
+                    extra_data: header.extra_data.clone(),
+                    ..sorted
+                },
+                header
+            );
+        }
+    }
+
+    #[test]
+    fn sort_commit_seals_rejects_duplicate_signers() {
+        let signer = PrivateKeySigner::random();
+        let (header, _) = sealed_header(BesuConsensusType::Qbft, &[&signer, &signer]);
+        let err = sort_commit_seals(&header, BesuConsensusType::Qbft).unwrap_err();
+        assert!(err.to_string().contains("duplicate commit seal signer"));
     }
 }

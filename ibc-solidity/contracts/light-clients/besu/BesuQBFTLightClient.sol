@@ -4,6 +4,8 @@ pragma solidity ^0.8.28;
 import { RLP } from "@openzeppelin-contracts/utils/RLP.sol";
 import { Memory } from "@openzeppelin-contracts/utils/Memory.sol";
 
+import { IBesuLightClientMsgs } from "./msgs/IBesuLightClientMsgs.sol";
+
 import { BesuLightClientBase } from "./BesuLightClientBase.sol";
 import { Header } from "./utils/Header.sol";
 
@@ -12,35 +14,16 @@ import { Header } from "./utils/Header.sol";
 contract BesuQBFTLightClient is BesuLightClientBase {
     using Memory for *;
 
-    /// @notice Creates a Besu QBFT light client from an initial trusted consensus state.
-    /// @param ibcRouter Counterparty ICS26 router address whose storage is proven.
-    /// @param initialTrustedHeight Initial trusted Besu height.
-    /// @param initialTrustedTimestamp Initial trusted header timestamp in seconds.
-    /// @param initialTrustedStateRoot Initial trusted root of the state trie at `initialTrustedHeight`.
-    /// @param initialTrustedValidators Initial trusted validator set.
-    /// @param trustingPeriod Maximum age in seconds for trusted consensus states.
-    /// @param maxClockDrift Maximum allowed future drift in seconds for submitted headers.
+    /// @notice Creates a Besu QBFT light client from an initial trusted client and consensus state.
+    /// @param initialClientState Initial client state. Its `latestHeight` is the height of `initialConsensusState`.
+    /// @param initialConsensusState Initial trusted consensus state at `initialClientState.latestHeight`.
     /// @param roleManager Address that administers proof submission; if zero, proof submission is open.
     constructor(
-        address ibcRouter,
-        uint64 initialTrustedHeight,
-        uint64 initialTrustedTimestamp,
-        bytes32 initialTrustedStateRoot,
-        address[] memory initialTrustedValidators,
-        uint64 trustingPeriod,
-        uint64 maxClockDrift,
+        IBesuLightClientMsgs.ClientState memory initialClientState,
+        IBesuLightClientMsgs.ConsensusState memory initialConsensusState,
         address roleManager
     )
-        BesuLightClientBase(
-            ibcRouter,
-            initialTrustedHeight,
-            initialTrustedTimestamp,
-            initialTrustedStateRoot,
-            initialTrustedValidators,
-            trustingPeriod,
-            maxClockDrift,
-            roleManager
-        )
+        BesuLightClientBase(initialClientState, initialConsensusState, roleManager)
     { }
 
     /// @inheritdoc BesuLightClientBase
