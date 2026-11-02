@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 mod archive;
 mod evidence;
 mod evm;
@@ -52,7 +54,7 @@ use crate::{
     archive::Archive,
     evidence::Evidence,
     evm::{consensus_hash_of, Evm},
-    soroban::{bytes, field, packet, router_events, RouterEvent, SorobanRpc},
+    soroban::{bytes, field, packet, router_events, text, unsigned, RouterEvent, SorobanRpc},
     stellar_api::StellarApi,
 };
 
@@ -238,7 +240,7 @@ fn relayable(
 ) -> Result<Relayable> {
     let wanted = |packet: &Packet| sequences.is_empty() || sequences.contains(&packet.sequence);
     let mut found = Vec::new();
-    let mut acknowledgements = Vec::new();
+    let mut acknowledgements = HashMap::new();
 
     for event in events {
         match event.name.as_str() {
@@ -263,6 +265,19 @@ fn relayable(
                 }
             }
             "write_ack" => {
+                let client = text(
+                    event
+                        .topics
+                        .get(1)
+                        .ok_or_else(|| anyhow!("write_ack carries no client topic"))?,
+                )?;
+                let sequence = unsigned(
+                    event
+                        .topics
+                        .get(2)
+                        .ok_or_else(|| anyhow!("write_ack carries no sequence topic"))?,
+                )?;
+
                 let stellar_xdr::ScVal::Vec(Some(written)) =
                     field(&event.data, "acknowledgements")?
                 else {
@@ -273,19 +288,23 @@ fn relayable(
                     .first()
                     .ok_or_else(|| anyhow!("write_ack carries no acknowledgement"))?;
 
-                acknowledgements.push(bytes(first)?);
+                acknowledgements.insert((client, sequence), bytes(first)?);
             }
             _ => {}
         }
     }
 
-    let mut pending = acknowledgements.into_iter();
-
     for item in &mut found {
-        if let Relayable::Acknowledge(_, acknowledgement) = item {
-            *acknowledgement = pending
-                .next()
-                .ok_or_else(|| anyhow!("a received packet has no written acknowledgement"))?;
+        if let Relayable::Acknowledge(received, acknowledgement) = item {
+            *acknowledgement = acknowledgements
+                .remove(&(received.destClient.clone(), received.sequence))
+                .ok_or_else(|| {
+                    anyhow!(
+                        "received packet {} sequence {} has no written acknowledgement",
+                        received.destClient,
+                        received.sequence
+                    )
+                })?;
         }
     }
 
@@ -510,12 +529,19 @@ impl StellarToEthService {
             Some(raw) => raw
                 .parse::<u32>()
                 .with_context(|| format!("ledger {raw} is not a number"))?,
-            None => self.evidence.current_ledger().await? - 2,
+            None => {
+                let current = self.evidence.current_ledger().await?;
+
+                current.checked_sub(2).ok_or_else(|| {
+                    anyhow!("the current ledger {current} is too low to create a client from")
+                })?
+            }
         };
 
         let fixture = self.evidence.fixture(ledger).await?;
         let trust_root: [u8; 32] = Sha256::digest(fixture.trust_root_xdr()).into();
-        let network_id = sp1_stellar_prover::decode_hex32(&fixture.network_id);
+        let network_id = sp1_stellar_prover::try_decode_hex32(&fixture.network_id)
+            .map_err(|error| anyhow!("the network id of ledger {ledger}: {error}"))?;
 
         let consensus_state =
             tokio::task::spawn_blocking(move || consensus_state_of(&fixture.verify_natively(None)))

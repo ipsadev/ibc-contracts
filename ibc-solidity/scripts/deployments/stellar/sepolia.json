@@ -1,5 +1,5 @@
 {
-  "network": "mainnet",
+  "network": "mainnet-fixture",
   "verifier": "0x397A5f7f3dBd538f23DE225B51f532c34448dA9B",
   "roleManager": "0x3f09B9D0E8453C91FBA256F8e2A39A7200D7604B",
   "updateClientVkey": "0x00ce3e12fb8334da3a7a072110c9a482a4526c1603adb1cc0b2c2fafdd5dec19",

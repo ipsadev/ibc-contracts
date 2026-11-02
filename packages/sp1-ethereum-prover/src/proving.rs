@@ -1,9 +1,15 @@
+// SPDX-License-Identifier: Apache-2.0
+
+use std::time::Duration;
+
 use anyhow::{anyhow, Context, Result};
 use sp1_sdk::{
     blocking::{Elf, ProveRequest, Prover, ProverClient, SP1Stdin},
     network::proto::types::ProofRequest,
     HashableKey, ProvingKey, SP1ProofMode,
 };
+
+const PROOF_DEADLINE: Duration = Duration::from_secs(3_600);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -110,7 +116,7 @@ pub fn run(elf: &[u8], stdin: SP1Stdin, mode: Mode, name: &str) -> Result<Outcom
         .map_err(|error| anyhow!("requesting the {name} proof failed: {error}"))?;
 
     let proof = network
-        .wait_proof(request_id, None, None)
+        .wait_proof(request_id, Some(PROOF_DEADLINE), None)
         .map_err(|error| anyhow!("proving {name} failed (request {request_id}): {error}"))?;
 
     network

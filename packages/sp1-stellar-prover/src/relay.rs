@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use alloy_sol_types::SolValue;
 use anyhow::{anyhow, Context, Result};
 use sp1_sdk::{
@@ -12,6 +14,8 @@ use stellar_light_client_solidity_types::MembershipOutput;
 use stellar_light_client_update_client::{update_client, ConsensusState, UpdateClientOutput};
 
 use crate::{decode_hex32, Fixture};
+
+const PROOF_DEADLINE: Duration = Duration::from_secs(3_600);
 
 pub struct Programs {
     pub update_client: Vec<u8>,
@@ -167,7 +171,7 @@ fn prove_one(client: &NetworkProver, elf: &[u8], stdin: SP1Stdin, name: &str) ->
         .map_err(|error| anyhow!("requesting the {name} proof failed: {error}"))?;
 
     let proof = client
-        .wait_proof(request_id, None, None)
+        .wait_proof(request_id, Some(PROOF_DEADLINE), None)
         .map_err(|error| anyhow!("proving {name} failed (request {request_id}): {error}"))?;
 
     client

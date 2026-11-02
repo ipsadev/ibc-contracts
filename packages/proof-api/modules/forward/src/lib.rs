@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::{anyhow, Result};
 use proof_api_core::{
     api::{

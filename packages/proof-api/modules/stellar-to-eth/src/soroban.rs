@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::{anyhow, bail, Context, Result};
 use ibc_eureka_solidity_types::ics26::IICS26RouterMsgs::{Packet, Payload};
 use serde_json::{json, Value};
@@ -153,6 +155,7 @@ fn written_entries(changes: &LedgerEntryChanges) -> Vec<LedgerEntry> {
 
 pub struct RouterEvent {
     pub name: String,
+    pub topics: Vec<ScVal>,
     pub data: ScVal,
 }
 
@@ -175,6 +178,7 @@ pub fn router_events(executed: &Executed, router: [u8; 32]) -> Vec<RouterEvent> 
 
             Some(RouterEvent {
                 name,
+                topics: body.topics.to_vec(),
                 data: body.data.clone(),
             })
         })

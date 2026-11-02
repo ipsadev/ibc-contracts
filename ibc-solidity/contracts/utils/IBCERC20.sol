@@ -24,6 +24,9 @@ contract IBCERC20 is IIBCERC20Errors, IIBCERC20, ERC20Upgradeable {
     /// @param _customDecimals The decimals for the custom token metadata. Set by `setMetadata`.
     /// @param _customName The name for the custom token metadata. Set by `setMetadata`.
     /// @param _customSymbol The symbol for the custom token metadata. Set by `setMetadata`.
+    /// @param _customDecimalsSet If `setMetadata` has set the decimals, which can then no longer change. Last, so the
+    /// beacon upgrade that adds it leaves every existing field in place.
+    // solhint-disable-next-line gas-struct-packing
     struct IBCERC20Storage {
         string _fullDenomPath;
         address _escrow;
@@ -32,6 +35,7 @@ contract IBCERC20 is IIBCERC20Errors, IIBCERC20, ERC20Upgradeable {
         uint8 _customDecimals;
         string _customName;
         string _customSymbol;
+        bool _customDecimalsSet;
     }
 
     /// @notice ERC-7201 slot for the IBCERC20 storage
@@ -91,10 +95,17 @@ contract IBCERC20 is IIBCERC20Errors, IIBCERC20, ERC20Upgradeable {
     function setMetadata(uint8 customDecimals, string calldata customName, string calldata customSymbol) external {
         IBCERC20Storage storage $ = _getIBCERC20Storage();
         address authority = IAccessManaged($._ics20).authority();
-        (bool isCustomizer,) = IAccessManager(authority).hasRole(IBCRolesLib.ERC20_CUSTOMIZER_ROLE, _msgSender());
-        require(isCustomizer, IBCERC20Unauthorized(_msgSender()));
+        (bool isCustomizer, uint32 executionDelay) =
+            IAccessManager(authority).hasRole(IBCRolesLib.ERC20_CUSTOMIZER_ROLE, _msgSender());
+        require(isCustomizer && executionDelay == 0, IBCERC20Unauthorized(_msgSender()));
+
+        require(
+            !$._customDecimalsSet || customDecimals == $._customDecimals,
+            IBCERC20DecimalsAlreadySet($._customDecimals, customDecimals)
+        );
 
         $._customMetadataSet = true;
+        $._customDecimalsSet = true;
         $._customDecimals = customDecimals;
         $._customName = customName;
         $._customSymbol = customSymbol;

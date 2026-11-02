@@ -20,7 +20,9 @@ interface IStellarUpdateClientMsgs {
     /// @param clientState The client state that was used to verify the header.
     /// @param trustedConsensusState The trusted consensus state.
     /// @param newConsensusState The new consensus state with the verified header.
-    /// @param time The time at which the header was verified, in unix nanoseconds.
+    /// @param time The time the prover says it verified the header, in unix nanoseconds. The program echoes whatever
+    /// the prover supplied, so it is not verified, and SP1ICSStellar never reads it. The trusted time is
+    /// newConsensusState.closeTime, which SCP signed.
     /// @param trustedHeight The trusted height.
     /// @param newHeight The new height.
     struct UpdateClientOutput {

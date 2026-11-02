@@ -26,7 +26,7 @@ on:
 jobs:
   additive:
     name: upstream-untouched
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -47,7 +47,7 @@ jobs:
 
   guests:
     name: guests-and-vkeys
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -139,7 +139,7 @@ jobs:
   differential:
     name: differential-and-negative
     needs: [guests]
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -176,7 +176,7 @@ jobs:
 
   solidity:
     name: solidity-client
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     defaults:

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use proof_api_core::api::RelayByTxRequest;
 use proof_api_forward::{entries, transaction_id};
 use tonic::Status;

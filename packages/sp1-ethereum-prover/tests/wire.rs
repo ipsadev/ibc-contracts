@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use std::path::PathBuf;
 
 use ethereum_light_client::{client_state::ClientState, consensus_state::ConsensusState};

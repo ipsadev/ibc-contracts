@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use std::time::{Duration, Instant};
 
 use alloy::primitives::{Address, B256, U256};

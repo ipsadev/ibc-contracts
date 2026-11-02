@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 config="${CONFIG:-$root/programs/stellar-proof-api/testnet.json}"
-image="${IMAGE:-amandagonsalvesx/ipsa-proof-api}"
+image="${IMAGE:-ipsa-proof-api}"
 tag="${TAG:-$(git -C "$root" rev-parse --short=12 HEAD)}"
 platform="${PLATFORM:-linux/arm64}"
 staging="$(mktemp -d)"

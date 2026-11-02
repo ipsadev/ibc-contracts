@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use alloy::{
     primitives::{keccak256, Address},
     providers::{Provider, RootProvider},

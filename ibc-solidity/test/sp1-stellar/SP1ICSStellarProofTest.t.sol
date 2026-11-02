@@ -46,6 +46,8 @@ contract SP1ICSStellarProofTest is Test {
 
         output = abi.decode(publicValues, (IStellarUpdateClientMsgs.UpdateClientOutput));
 
+        vm.warp(output.newConsensusState.closeTime);
+
         verifier = new SP1VerifierGroth16();
 
         client = new SP1ICSStellar(

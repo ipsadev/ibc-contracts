@@ -24,6 +24,8 @@ interface ISP1ICSStellarErrors {
     error ConsensusStateHashMismatch(bytes32 expected, bytes32 actual);
 
     /// @notice A consensus state already exists at that height and differs from this one.
+    /// @dev Raised by the combined update-and-membership path, which cannot freeze without failing the packet. The
+    /// same proof submitted through updateClient freezes the client as misbehaviour.
     /// @param height The height in question.
     error ConsensusStateConflict(uint64 height);
 
@@ -32,7 +34,12 @@ interface ISP1ICSStellarErrors {
     /// @param actual The hash the proof was anchored to.
     error ResultHashMismatch(bytes32 expected, bytes32 actual);
 
-    /// @notice The client is frozen and can do nothing until governance intervenes.
+    /// @notice The proven ledger closed later than this chain's clock allows, even after the allowed drift.
+    /// @param currentTimestamp The current block timestamp, in unix seconds.
+    /// @param closeTime The proven ledger's close time, in unix seconds.
+    error ProofIsInTheFuture(uint256 currentTimestamp, uint256 closeTime);
+
+    /// @notice The client is frozen permanently and verifies nothing further.
     error FrozenClient();
 
     /// @notice The proof proves a different path or value than the one being asked about.
@@ -54,8 +61,8 @@ interface ISP1ICSStellarErrors {
     /// @param actual The height the proof establishes.
     error ProofHeightMismatch(uint64 expected, uint64 actual);
 
-    /// @notice Misbehaviour handling has not been built yet.
-    /// @dev Freezing on conflicting headers is scoped as Phase 8 of the corridor plan. Until then a
-    /// client can only be frozen by whoever holds the admin role.
+    /// @notice Submitting misbehaviour evidence through misbehaviour() is not supported.
+    /// @dev Conflicting headers are still caught: an updateClient proof of a different consensus state at a stored
+    /// height freezes the client. Otherwise only CLIENT_FREEZER_ROLE can freeze it.
     error MisbehaviourNotImplemented();
 }

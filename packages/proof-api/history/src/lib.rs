@@ -1,13 +1,15 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{
     sync::{Arc, OnceLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use rustls::{crypto::ring, ClientConfig, RootCertStore};
 use rustls_pki_types::{pem::PemObject, CertificateDer};
 use sp1_sdk::network::proto::types::ProofRequest;
-use tokio_postgres::{Client, Config};
+use tokio_postgres::{config::SslMode, Client, Config};
 use tokio_postgres_rustls::MakeRustlsConnect;
 
 pub const DATABASE_URL_VARIABLE: &str = "PROOF_HISTORY_DB_URL";
@@ -15,6 +17,8 @@ pub const DATABASE_URL_VARIABLE: &str = "PROOF_HISTORY_DB_URL";
 const RDS_BUNDLE: &[u8] = include_bytes!("../certificates/rds-global-bundle.pem");
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
+const RECORD_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS proof_requests (
     id BIGSERIAL PRIMARY KEY,
@@ -193,13 +197,24 @@ impl ProofHistory {
             return;
         };
 
-        if let Err(error) = insert(url, entry).await {
-            tracing::warn!(
-                %error,
-                tx_hash = %entry.tx_hash,
-                program = %entry.program,
-                "could not record the proof"
-            );
+        match tokio::time::timeout(RECORD_TIMEOUT, insert(url, entry)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(
+                    %error,
+                    tx_hash = %entry.tx_hash,
+                    program = %entry.program,
+                    "could not record the proof"
+                );
+            }
+            Err(_) => {
+                tracing::warn!(
+                    timeout_seconds = RECORD_TIMEOUT.as_secs(),
+                    tx_hash = %entry.tx_hash,
+                    program = %entry.program,
+                    "recording the proof timed out"
+                );
+            }
         }
     }
 }
@@ -219,54 +234,99 @@ async fn insert(url: &str, entry: &ProofEntry) -> Result<()> {
         .await
         .context("starting a proof history transaction")?;
 
-    if entry.request.is_none() {
-        let previous = transaction
+    if let Some(request) = &entry.request {
+        let recorded = transaction
             .query_opt(
-                "SELECT id, status FROM proof_requests \
-                 WHERE tx_hash = $1 AND module = $2 AND kind = $3 AND program = $4 \
-                 AND step = $5 AND sequences = $6 AND src_chain = $7 AND dst_chain = $8 \
-                 ORDER BY id DESC LIMIT 1 FOR UPDATE",
-                &[
-                    &tx_hash,
-                    &entry.module,
-                    &entry.kind,
-                    &entry.program,
-                    &(entry.step as i32),
-                    &sequences,
-                    &entry.src_chain,
-                    &entry.dst_chain,
-                ],
+                "SELECT 1 FROM proof_requests WHERE request_id = $1",
+                &[&request.id],
             )
             .await
-            .context("reading the previous attempt")?;
+            .context("looking up the network request")?;
 
-        if let Some(previous) =
-            previous.filter(|row| RETRYABLE.contains(&row.get::<_, String>(1).as_str()))
-        {
-            transaction
-                .execute(
-                    "UPDATE proof_requests SET status = $2, error = $3, vkey = $4, \
-                     trusted_height = $5, target_height = $6, public_values = $7, proof = $8, \
-                     attempts = attempts + 1, last_attempt_at = now() WHERE id = $1",
-                    &[
-                        &previous.get::<_, i64>(0),
-                        &entry.status,
-                        &entry.error,
-                        &entry.vkey.map(|vkey| format!("0x{}", hex::encode(vkey))),
-                        &entry.trusted_height.map(|height| height as i64),
-                        &entry.target_height.map(|height| height as i64),
-                        &entry.public_values,
-                        &entry.proof,
-                    ],
-                )
-                .await
-                .context("recording another attempt")?;
-
+        if recorded.is_some() {
             return transaction
                 .commit()
                 .await
                 .context("committing the proof history");
         }
+    }
+
+    let previous = transaction
+        .query_opt(
+            "SELECT id, status FROM proof_requests \
+             WHERE tx_hash = $1 AND module = $2 AND kind = $3 \
+             AND step = $4 AND sequences = $5 AND src_chain = $6 AND dst_chain = $7 \
+             ORDER BY id DESC LIMIT 1 FOR UPDATE",
+            &[
+                &tx_hash,
+                &entry.module,
+                &entry.kind,
+                &(entry.step as i32),
+                &sequences,
+                &entry.src_chain,
+                &entry.dst_chain,
+            ],
+        )
+        .await
+        .context("reading the previous attempt")?;
+
+    if let Some(previous) =
+        previous.filter(|row| RETRYABLE.contains(&row.get::<_, String>(1).as_str()))
+    {
+        let id = previous.get::<_, i64>(0);
+
+        transaction
+            .execute(
+                "UPDATE proof_requests SET program = $2, prover = $3, status = $4, error = $5, \
+                 vkey = $6, trusted_height = $7, target_height = $8, public_values = $9, \
+                 proof = $10, attempts = attempts + 1, last_attempt_at = now() WHERE id = $1",
+                &[
+                    &id,
+                    &entry.program,
+                    &entry.prover,
+                    &entry.status,
+                    &entry.error,
+                    &entry.vkey.map(|vkey| format!("0x{}", hex::encode(vkey))),
+                    &entry.trusted_height.map(|height| height as i64),
+                    &entry.target_height.map(|height| height as i64),
+                    &entry.public_values,
+                    &entry.proof,
+                ],
+            )
+            .await
+            .context("recording another attempt")?;
+
+        if entry.request.is_some() {
+            transaction
+                .execute(
+                    "UPDATE proof_requests SET request_id = $2, request_tx_hash = $3, \
+                     fulfiller = $4, cycles = $5, gas_used = $6, gas_limit = $7, gas_price = $8, \
+                     base_fee = $9, deduction_amount = $10, refund_amount = $11, \
+                     requested_at = $12, fulfilled_at = $13 WHERE id = $1",
+                    &[
+                        &id,
+                        &request.id,
+                        &request.tx_hash,
+                        &request.fulfiller,
+                        &request.cycles.map(|cycles| cycles as i64),
+                        &request.gas_used.map(|gas| gas as i64),
+                        &request.gas_limit.map(|gas| gas as i64),
+                        &request.gas_price.map(|price| price as i64),
+                        &request.base_fee,
+                        &request.deduction_amount,
+                        &request.refund_amount,
+                        &request.requested_at.map(timestamp),
+                        &request.fulfilled_at.map(timestamp),
+                    ],
+                )
+                .await
+                .context("recording the network request of another attempt")?;
+        }
+
+        return transaction
+            .commit()
+            .await
+            .context("committing the proof history");
     }
 
     transaction
@@ -326,6 +386,16 @@ async fn connect(url: &str) -> Result<Client> {
 
     if config.get_connect_timeout().is_none() {
         config.connect_timeout(CONNECT_TIMEOUT);
+    }
+
+    match config.get_ssl_mode() {
+        SslMode::Disable => {
+            bail!("the proof history database url sets sslmode=disable; the proof history requires TLS")
+        }
+        SslMode::Prefer => {
+            config.ssl_mode(SslMode::Require);
+        }
+        _ => {}
     }
 
     let (client, connection) = config

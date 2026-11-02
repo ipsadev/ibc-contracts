@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+
+use std::time::Duration;
+
 use anyhow::{anyhow, bail, Context, Result};
 use prost::Message;
 use tonic::{
@@ -5,6 +9,10 @@ use tonic::{
 };
 
 const TREE_SIBLINGS: &str = "/stellar.gateway.v1.StellarGatewayQuery/QueryTreeSiblings";
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+const CALL_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Clone, PartialEq, Message)]
 struct QueryTreeSiblingsRequest {
@@ -35,6 +43,8 @@ pub struct TreeSiblings {
 pub async fn tree_siblings(address: &str, ledger: u32, path: &[u8]) -> Result<TreeSiblings> {
     let channel = Endpoint::from_shared(address.to_string())
         .with_context(|| format!("gateway address {address}"))?
+        .connect_timeout(CONNECT_TIMEOUT)
+        .timeout(CALL_TIMEOUT)
         .connect()
         .await
         .with_context(|| format!("connecting to the gateway at {address}"))?;

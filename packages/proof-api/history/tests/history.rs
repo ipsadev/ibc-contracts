@@ -1,5 +1,38 @@
-use proof_api_history::{normalise_tx_hash, NetworkRequest, ProofEntry, ProofHistory};
+// SPDX-License-Identifier: Apache-2.0
+
+use proof_api_history::{normalise_tx_hash, tls, NetworkRequest, ProofEntry, ProofHistory};
 use sp1_sdk::network::proto::types::ProofRequest;
+use tokio_postgres::{config::SslMode, Client, Config};
+
+const TEST_DATABASE_URL_VARIABLE: &str = "PROOF_HISTORY_TEST_DB_URL";
+
+fn test_database_url() -> String {
+    std::env::var(TEST_DATABASE_URL_VARIABLE).unwrap_or_else(|_| {
+        panic!("{TEST_DATABASE_URL_VARIABLE} must point at a Postgres database that accepts TLS")
+    })
+}
+
+async fn read_back(url: &str) -> Client {
+    let mut config: Config = url.parse().unwrap();
+
+    config.ssl_mode(SslMode::Require);
+
+    let (client, connection) = config.connect(tls()).await.unwrap();
+
+    tokio::spawn(connection);
+
+    client
+}
+
+fn unique_hash() -> String {
+    format!(
+        "{:064x}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    )
+}
 
 fn entry(tx_hash: &str) -> ProofEntry {
     ProofEntry {
@@ -86,10 +119,9 @@ async fn without_a_database_recording_is_a_no_op() {
 }
 
 #[tokio::test]
+#[ignore = "needs PROOF_HISTORY_TEST_DB_URL pointing at a Postgres database that accepts TLS"]
 async fn a_proof_is_written_and_read_back() {
-    let Ok(url) = std::env::var("PROOF_HISTORY_TEST_DB_URL") else {
-        return;
-    };
+    let url = test_database_url();
 
     let history = ProofHistory::new(Some(url.clone()));
 
@@ -97,10 +129,7 @@ async fn a_proof_is_written_and_read_back() {
     history.prepare().await.unwrap();
     history.record(&entry("0xE6B3241A")).await;
 
-    let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-        .await
-        .unwrap();
-    tokio::spawn(connection);
+    let client = read_back(&url).await;
 
     let row = client
         .query_one(
@@ -145,19 +174,12 @@ fn gateway_attempt(tx_hash: &str, status: &str, error: Option<&str>) -> ProofEnt
 }
 
 #[tokio::test]
+#[ignore = "needs PROOF_HISTORY_TEST_DB_URL pointing at a Postgres database that accepts TLS"]
 async fn retries_of_one_proof_share_a_row() {
-    let Ok(url) = std::env::var("PROOF_HISTORY_TEST_DB_URL") else {
-        return;
-    };
+    let url = test_database_url();
 
     let history = ProofHistory::new(Some(url.clone()));
-    let hash = format!(
-        "{:064x}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
+    let hash = unique_hash();
     let hash = hash.as_str();
 
     history.prepare().await.unwrap();
@@ -182,10 +204,7 @@ async fn retries_of_one_proof_share_a_row() {
         .record(&gateway_attempt(hash, "fulfilled", None))
         .await;
 
-    let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-        .await
-        .unwrap();
-    tokio::spawn(connection);
+    let client = read_back(&url).await;
 
     let rows = client
         .query(
@@ -203,4 +222,97 @@ async fn retries_of_one_proof_share_a_row() {
     assert!(rows[0].get::<_, bool>(3));
     assert_eq!(rows[1].get::<_, String>(0), "fulfilled");
     assert_eq!(rows[1].get::<_, i32>(2), 1);
+}
+
+fn relay_attempt(tx_hash: &str, step: u32, program: &str, request_id: Option<&str>) -> ProofEntry {
+    ProofEntry {
+        module: "stellar_to_eth".to_string(),
+        src_chain: "stellar-testnet".to_string(),
+        dst_chain: "11155111".to_string(),
+        kind: "recv".to_string(),
+        tx_hash: tx_hash.to_string(),
+        step,
+        program: program.to_string(),
+        status: "fulfilled".to_string(),
+        request: request_id.map(|id| NetworkRequest {
+            id: id.to_string(),
+            cycles: Some(664_243),
+            ..NetworkRequest::default()
+        }),
+        ..entry(tx_hash)
+    }
+}
+
+#[tokio::test]
+#[ignore = "needs PROOF_HISTORY_TEST_DB_URL pointing at a Postgres database that accepts TLS"]
+async fn a_later_success_supersedes_the_failed_attempt() {
+    let url = test_database_url();
+
+    let history = ProofHistory::new(Some(url.clone()));
+    let hash = unique_hash();
+    let hash = hash.as_str();
+    let update_request = format!("0x{hash}01");
+    let membership_request = format!("0x{hash}02");
+
+    history.prepare().await.unwrap();
+    history
+        .record(&ProofEntry {
+            status: "failed".to_string(),
+            error: Some("the network rejected the request".to_string()),
+            vkey: None,
+            public_values: None,
+            proof: None,
+            ..relay_attempt(hash, 0, "update_client and membership", None)
+        })
+        .await;
+    history
+        .record(&relay_attempt(
+            hash,
+            0,
+            "update_client",
+            Some(&update_request),
+        ))
+        .await;
+    history
+        .record(&relay_attempt(
+            hash,
+            1,
+            "membership",
+            Some(&membership_request),
+        ))
+        .await;
+    history
+        .record(&relay_attempt(
+            hash,
+            1,
+            "membership",
+            Some(&membership_request),
+        ))
+        .await;
+
+    let client = read_back(&url).await;
+
+    let rows = client
+        .query(
+            "SELECT step, program, status, error, attempts, request_id, cycles \
+             FROM proof_requests WHERE tx_hash = $1 ORDER BY step",
+            &[&hash],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].get::<_, i32>(0), 0);
+    assert_eq!(rows[0].get::<_, String>(1), "update_client");
+    assert_eq!(rows[0].get::<_, String>(2), "fulfilled");
+    assert_eq!(rows[0].get::<_, Option<String>>(3), None);
+    assert_eq!(rows[0].get::<_, i32>(4), 2);
+    assert_eq!(
+        rows[0].get::<_, Option<String>>(5).as_deref(),
+        Some(update_request.as_str())
+    );
+    assert_eq!(rows[0].get::<_, Option<i64>>(6), Some(664_243));
+    assert_eq!(rows[1].get::<_, i32>(0), 1);
+    assert_eq!(rows[1].get::<_, String>(1), "membership");
+    assert_eq!(rows[1].get::<_, i32>(4), 1);
 }

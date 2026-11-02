@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -8,6 +10,10 @@ use ipsa_scp_exporter::{
 };
 use serde_json::Value;
 use sp1_stellar_prover::Fixture;
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub struct Archive {
     options: Options,
@@ -30,9 +36,15 @@ impl Archive {
             options.archives_pinned = true;
         }
 
+        let http = reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .context("building the history archive http client")?;
+
         Ok(Self {
             options,
-            http: reqwest::Client::new(),
+            http,
             checkpoint_timeout,
         })
     }
@@ -65,7 +77,10 @@ impl Archive {
     }
 
     pub async fn wait_for(&self, ledger: u32) -> Result<()> {
-        let needed = checkpoint_for(ledger + 1);
+        let following = ledger
+            .checked_add(1)
+            .ok_or_else(|| anyhow!("ledger {ledger} has no successor"))?;
+        let needed = checkpoint_for(following);
         let started = Instant::now();
 
         loop {

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -12,6 +14,10 @@ use stellar_xdr::{LedgerCloseMeta, Limits, ReadXdr, WriteXdr};
 
 const POLL: Duration = Duration::from_secs(2);
 
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+
 pub struct StellarApi {
     url: String,
     http: reqwest::Client,
@@ -24,9 +30,15 @@ impl StellarApi {
         let network = Network::parse(network)
             .map_err(|error| anyhow!("unknown Stellar network {network}: {error}"))?;
 
+        let http = reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .context("building the ipsa api http client")?;
+
         Ok(Self {
             url: url.trim_end_matches('/').to_string(),
-            http: reqwest::Client::new(),
+            http,
             network,
             timeout,
         })
@@ -71,11 +83,12 @@ impl StellarApi {
     }
 
     pub async fn wait_for(&self, ledger: u32) -> Result<()> {
+        let following = successor(ledger)?;
         let started = Instant::now();
 
         loop {
             if self
-                .get(&format!("/archive/scp/{}", ledger + 1))
+                .get(&format!("/archive/scp/{following}"))
                 .await?
                 .is_some()
             {
@@ -90,8 +103,7 @@ impl StellarApi {
 
             if started.elapsed() > self.timeout {
                 bail!(
-                    "the api had no consensus messages for ledger {} within {}s",
-                    ledger + 1,
+                    "the api had no consensus messages for ledger {following} within {}s",
                     self.timeout.as_secs()
                 );
             }
@@ -108,7 +120,10 @@ impl StellarApi {
     }
 
     pub async fn exported(&self, ledger: u32) -> Result<Exported> {
-        let following = ledger + 1;
+        let following = successor(ledger)?;
+        let preceding = ledger
+            .checked_sub(1)
+            .ok_or_else(|| anyhow!("ledger {ledger} has no predecessor"))?;
 
         let scp = self.require(&format!("/archive/scp/{ledger}")).await?;
         let next_scp = self.require(&format!("/archive/scp/{following}")).await?;
@@ -116,7 +131,7 @@ impl StellarApi {
             .require(&format!("/archive/ledger-header/{ledger}"))
             .await?;
         let previous = self
-            .get(&format!("/archive/ledger-header/{}", ledger - 1))
+            .get(&format!("/archive/ledger-header/{preceding}"))
             .await?;
         let closed = self.require(&format!("/ledger/{ledger}")).await?;
         let next_tx_set = hex_field(
@@ -237,6 +252,12 @@ pub fn result_pairs(metadata_xdr: &[u8]) -> Result<Vec<Vec<u8>>> {
     };
 
     pairs.context("encoding the transaction results")
+}
+
+fn successor(ledger: u32) -> Result<u32> {
+    ledger
+        .checked_add(1)
+        .ok_or_else(|| anyhow!("ledger {ledger} has no successor"))
 }
 
 fn number(value: &Value, key: &str) -> Result<u64> {

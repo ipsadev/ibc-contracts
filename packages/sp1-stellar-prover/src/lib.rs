@@ -364,10 +364,16 @@ pub fn decode_hex(hexed: &str) -> Vec<u8> {
 }
 
 pub fn decode_hex32(hexed: &str) -> [u8; 32] {
-    decode_hex(hexed)
+    try_decode_hex32(hexed).unwrap_or_else(|error| panic!("{error}"))
+}
+
+pub fn try_decode_hex32(hexed: &str) -> Result<[u8; 32], String> {
+    let decoded = hex::decode(hexed).map_err(|error| format!("bad hex in the fixture: {error}"))?;
+
+    decoded
         .as_slice()
         .try_into()
-        .unwrap_or_else(|_| panic!("expected 32 bytes of hex, got {}", hexed.len() / 2))
+        .map_err(|_| format!("expected 32 bytes of hex, got {}", decoded.len()))
 }
 
 pub fn consensus_state_of(verified: &VerifiedLedger) -> ConsensusState {

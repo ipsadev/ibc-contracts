@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{path::PathBuf, str::FromStr, time::Duration};
 
 use alloy::primitives::{Address, U256};

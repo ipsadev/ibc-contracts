@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #[path = "../../../programs/sp1-ethereum-programs/update-client/src/wire.rs"]
 pub mod update_wire;
 

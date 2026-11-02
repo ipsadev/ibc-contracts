@@ -178,10 +178,48 @@ contract IBCERC20Test is Test {
 
         vm.startPrank(metadataCustomizer);
         ibcERC20.setMetadata(7, "Stellar Lumens", "XLM");
+        ibcERC20.setMetadata(7, "Stellar Lumens", "XLM");
+        vm.stopPrank();
+
+        assertEq(ibcERC20.decimals(), 7);
+        assertEq(ibcERC20.name(), "Stellar Lumens");
+        assertEq(ibcERC20.symbol(), "XLM");
+    }
+
+    function test_success_SetMetadataAgainChangesNameAndSymbol() public {
+        accessManager.grantRole(IBCRolesLib.ERC20_CUSTOMIZER_ROLE, metadataCustomizer, 0);
+
+        vm.startPrank(metadataCustomizer);
+        ibcERC20.setMetadata(7, "Stellar Lumens", "XLM");
+        ibcERC20.setMetadata(7, "Lumens", "sXLM");
+        vm.stopPrank();
+
+        assertEq(ibcERC20.decimals(), 7);
+        assertEq(ibcERC20.name(), "Lumens");
+        assertEq(ibcERC20.symbol(), "sXLM");
+    }
+
+    function test_failure_SetMetadataAgainChangesDecimals() public {
+        accessManager.grantRole(IBCRolesLib.ERC20_CUSTOMIZER_ROLE, metadataCustomizer, 0);
+
+        vm.startPrank(metadataCustomizer);
+        ibcERC20.setMetadata(7, "Stellar Lumens", "XLM");
+
+        vm.expectRevert(abi.encodeWithSelector(IIBCERC20Errors.IBCERC20DecimalsAlreadySet.selector, 7, 6));
         ibcERC20.setMetadata(6, "Stellar Lumens", "XLM");
         vm.stopPrank();
 
-        assertEq(ibcERC20.decimals(), 6);
+        assertEq(ibcERC20.decimals(), 7);
+    }
+
+    function test_failure_SetMetadataWithDelayedRole() public {
+        accessManager.grantRole(IBCRolesLib.ERC20_CUSTOMIZER_ROLE, metadataCustomizer, 1 days);
+
+        vm.prank(metadataCustomizer);
+        vm.expectRevert(abi.encodeWithSelector(IIBCERC20Errors.IBCERC20Unauthorized.selector, metadataCustomizer));
+        ibcERC20.setMetadata(7, "Stellar Lumens", "XLM");
+
+        assertEq(ibcERC20.decimals(), 18);
     }
 
     function test_failure_SetMetadata() public {

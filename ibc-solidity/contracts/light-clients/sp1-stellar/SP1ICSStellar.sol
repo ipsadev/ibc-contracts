@@ -55,6 +55,9 @@ contract SP1ICSStellar is ISP1ICSStellarErrors, ISP1ICSStellar, ILightClient, Mu
     /// @inheritdoc ISP1ICSStellar
     bytes32 public constant CLIENT_FREEZER_ROLE = keccak256("CLIENT_FREEZER_ROLE");
 
+    /// @inheritdoc ISP1ICSStellar
+    uint16 public constant ALLOWED_CLOCK_DRIFT = 30 minutes;
+
     /// @notice Sets the program verification keys and the initial client and consensus states.
     /// @param updateClientProgramVkey The verification key of the update client program.
     /// @param membershipProgramVkey The verification key of the verify (non)membership program.
@@ -62,7 +65,9 @@ contract SP1ICSStellar is ISP1ICSStellarErrors, ISP1ICSStellar, ILightClient, Mu
     /// @param sp1Verifier The address of the SP1 verifier contract.
     /// @param initialClientState The abi encoded initial client state.
     /// @param initialConsensusState The keccak256 hash of the initial consensus state.
-    /// @param roleManager Manages proof submitters and can submit proofs. The ICS26Router, in IBC.
+    /// @param roleManager Manages proof submitters, can submit proofs and can freeze the client. The ICS26Router, in
+    /// IBC. With address(0) anyone may submit proofs and nobody holds CLIENT_FREEZER_ROLE, so the client can only be
+    /// frozen by a proven misbehaviour.
     constructor(
         bytes32 updateClientProgramVkey,
         bytes32 membershipProgramVkey,
@@ -101,6 +106,9 @@ contract SP1ICSStellar is ISP1ICSStellarErrors, ISP1ICSStellar, ILightClient, Mu
         return hash;
     }
 
+    /// @dev A proof of a different consensus state at a height that already holds one is misbehaviour: the proof is
+    /// verified first, then the client is frozen and Misbehaviour is returned. Replaying the stored consensus state is
+    /// a no-op.
     /// @inheritdoc ILightClient
     function updateClient(bytes calldata updateMsg)
         external
@@ -121,6 +129,7 @@ contract SP1ICSStellar is ISP1ICSStellarErrors, ISP1ICSStellar, ILightClient, Mu
 
         _requireOurClientState(output.clientState);
         _requireRevision(output.newHeight.revisionNumber);
+        _requireNotInTheFuture(output.newConsensusState.closeTime);
 
         bytes32 trustedHash = keccak256(abi.encode(output.trustedConsensusState));
         bytes32 storedHash = getConsensusStateHash(output.trustedHeight.revisionHeight);
@@ -129,15 +138,18 @@ contract SP1ICSStellar is ISP1ICSStellarErrors, ISP1ICSStellar, ILightClient, Mu
         bytes32 newHash = keccak256(abi.encode(output.newConsensusState));
         bytes32 existing = _consensusStateHashes[output.newHeight.revisionHeight];
 
-        if (existing != 0) {
-            // A second, different consensus state at the same height is exactly what misbehaviour
-            // looks like. Until Phase 8 builds misbehaviour proving, refuse it rather than
-            // silently overwrite, and leave freezing to the freezer role.
-            require(existing == newHash, ConsensusStateConflict(output.newHeight.revisionHeight));
-
+        if (existing == newHash) {
             _verifySP1Proof(message.sp1Proof);
 
             return ILightClientMsgs.UpdateResult.NoOp;
+        }
+
+        if (existing != 0) {
+            _verifySP1Proof(message.sp1Proof);
+
+            _freeze();
+
+            return ILightClientMsgs.UpdateResult.Misbehaviour;
         }
 
         _consensusStateHashes[output.newHeight.revisionHeight] = newHash;
@@ -179,7 +191,14 @@ contract SP1ICSStellar is ISP1ICSStellarErrors, ISP1ICSStellar, ILightClient, Mu
 
     /// @inheritdoc ISP1ICSStellar
     function freeze() external onlyRole(CLIENT_FREEZER_ROLE) {
+        _freeze();
+    }
+
+    /// @notice Freezes the client and announces it.
+    function _freeze() private {
         clientState.isFrozen = true;
+
+        emit ClientFrozen(_msgSender());
     }
 
     /// @notice Verifies a (non)membership proof against the consensus state stored at a height.
@@ -224,7 +243,6 @@ contract SP1ICSStellar is ISP1ICSStellarErrors, ISP1ICSStellar, ILightClient, Mu
 
         _requireOurClientState(output.clientState);
 
-        // The anchor. Without this the proof could be of some other ledger's results entirely.
         require(
             output.transactionSetResultHash == membershipProof.trustedConsensusState.transactionSetResultHash,
             ResultHashMismatch(
@@ -246,6 +264,9 @@ contract SP1ICSStellar is ISP1ICSStellarErrors, ISP1ICSStellar, ILightClient, Mu
     /// against — the header verification inside the circuit is what establishes it. That is also
     /// why this stores the new consensus state: the proof establishes the height, so refusing to
     /// record it would throw away work already paid for.
+    /// A different consensus state at a height that already holds one is misbehaviour, but a membership call cannot
+    /// freeze the client without also failing the packet, which would undo the freeze. Like SP1ICS07Tendermint this
+    /// reverts with ConsensusStateConflict instead, and the same proof submitted through updateClient freezes it.
     /// @param proof The abi encoded SP1UcAndMembershipProof.
     /// @param proofHeight The height the proof is anchored to, which must be the height it proves.
     /// @param path The path of the key-value pair.
@@ -273,6 +294,7 @@ contract SP1ICSStellar is ISP1ICSStellarErrors, ISP1ICSStellar, ILightClient, Mu
 
         _requireOurClientState(output.updateClientOutput.clientState);
         _requireRevision(output.updateClientOutput.newHeight.revisionNumber);
+        _requireNotInTheFuture(output.updateClientOutput.newConsensusState.closeTime);
 
         require(
             proofHeight.revisionHeight == output.updateClientOutput.newHeight.revisionHeight,
@@ -296,8 +318,6 @@ contract SP1ICSStellar is ISP1ICSStellarErrors, ISP1ICSStellar, ILightClient, Mu
                 clientState.latestHeight = output.updateClientOutput.newHeight;
             }
         } else {
-            // Same reasoning as updateClient: a second, different consensus state at a height is
-            // misbehaviour, and refusing it is safer than overwriting.
             require(existing == newHash, ConsensusStateConflict(output.updateClientOutput.newHeight.revisionHeight));
         }
 
@@ -359,6 +379,15 @@ contract SP1ICSStellar is ISP1ICSStellarErrors, ISP1ICSStellar, ILightClient, Mu
     function _requireRevision(uint64 revisionNumber) private view {
         uint64 ours = clientState.latestHeight.revisionNumber;
         require(revisionNumber == ours, RevisionMismatch(ours, revisionNumber));
+    }
+
+    /// @notice Requires that a proven ledger did not close later than this chain's clock, allowing for drift.
+    /// @dev The close time is part of the StellarValue that SCP externalized, and the program checks the ledger header
+    /// carries exactly that value, so unlike UpdateClientOutput.time it is covered by the proof. There is no lower
+    /// bound: Stellar has no trusting period, and an old ledger is still final.
+    /// @param closeTime The ledger close time in unix seconds.
+    function _requireNotInTheFuture(uint64 closeTime) private view {
+        require(closeTime <= block.timestamp + ALLOWED_CLOCK_DRIFT, ProofIsInTheFuture(block.timestamp, closeTime));
     }
 
     /// @notice Forwards the proof to the SP1 verifier.

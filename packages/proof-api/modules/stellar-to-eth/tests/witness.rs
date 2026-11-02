@@ -1,7 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use std::path::Path;
 
 use proof_api_stellar_to_eth::{
-    soroban::{executed, field, packet, router_events, transaction_from_result},
+    soroban::{executed, field, packet, router_events, text, transaction_from_result, unsigned},
     witness::attach,
 };
 use sp1_stellar_prover::{decode_contract_id, Fixture};
@@ -194,4 +196,20 @@ fn the_received_packet_and_its_acknowledgement_are_read_from_the_router_events()
     assert_eq!(decoded.payloads[0].encoding, "application/x-solidity-abi");
     assert!(events.iter().any(|event| event.name == "write_ack"));
     assert!(events.iter().any(|event| event.name == "ibc_root"));
+}
+
+#[test]
+fn the_written_acknowledgement_names_its_packet_in_the_topics() {
+    let router = decode_contract_id(ROUTER).expect("router strkey");
+    let transaction = load_transaction();
+    let executed = executed(&transaction.meta).expect("meta v4 decodes");
+    let events = router_events(&executed, router);
+
+    let written = events
+        .iter()
+        .find(|event| event.name == "write_ack")
+        .expect("the router emitted write_ack");
+
+    assert_eq!(text(&written.topics[1]).expect("client topic"), "sepolia-0");
+    assert_eq!(unsigned(&written.topics[2]).expect("sequence topic"), 1);
 }
