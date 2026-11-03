@@ -119,6 +119,18 @@ impl StellarApi {
         Fixture::from_json(&json).context("reading the ledger evidence as a prover fixture")
     }
 
+    async fn transaction_results(&self, ledger: u32) -> Result<Vec<Vec<u8>>> {
+        if let Some(closed) = self.get(&format!("/ledger/{ledger}")).await? {
+            return result_pairs(&hex_field(&closed, "metadata_xdr")?);
+        }
+
+        let archived = self.require(&format!("/archive/results/{ledger}")).await?;
+
+        tracing::info!(ledger, "took the ledger's results from the archive");
+
+        hex_list(&archived, "result_pairs_xdr")
+    }
+
     pub async fn exported(&self, ledger: u32) -> Result<Exported> {
         let following = successor(ledger)?;
         let preceding = ledger
@@ -133,7 +145,7 @@ impl StellarApi {
         let previous = self
             .get(&format!("/archive/ledger-header/{preceding}"))
             .await?;
-        let closed = self.require(&format!("/ledger/{ledger}")).await?;
+        let result_pairs_xdr = self.transaction_results(ledger).await?;
         let next_tx_set = hex_field(
             &self
                 .require(&format!("/archive/tx-set/{following}"))
@@ -148,7 +160,7 @@ impl StellarApi {
             envelopes_xdr: hex_list(&scp, "envelopes_xdr")?,
             quorum_sets_xdr: hex_list(&scp, "quorum_sets_xdr")?,
             recorded_ledger_hash: Some(hash32(&header, "hash")?),
-            result_pairs_xdr: result_pairs(&hex_field(&closed, "metadata_xdr")?)?,
+            result_pairs_xdr,
             trusted_previous_hash: previous.map(|value| hash32(&value, "hash")).transpose()?,
         };
 

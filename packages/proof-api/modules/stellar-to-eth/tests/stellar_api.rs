@@ -75,3 +75,41 @@ async fn the_api_proves_a_ledger_the_archive_has_not_published() {
     assert!(!evidence.next_envelopes_xdr.is_empty());
     println!("ledger {ledger} assembled from the api while the archive is at {archived}");
 }
+
+#[tokio::test]
+#[ignore = "needs STELLAR_LIVE_API_URL pointing at a running ipsa api"]
+async fn the_api_rebuilds_a_ledger_soroban_rpc_no_longer_keeps() {
+    let url = live_api_url();
+
+    let api = StellarApi::new(&url, "testnet", Duration::from_secs(60)).expect("api");
+    let options = Options::for_network(Network::parse("testnet").expect("network"));
+
+    let oldest = reqwest::Client::new()
+        .post("https://soroban-testnet.stellar.org")
+        .json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getLedgers",
+            "params": { "startLedger": 1, "pagination": { "limit": 1 } }
+        }))
+        .send()
+        .await
+        .expect("rpc")
+        .json::<serde_json::Value>()
+        .await
+        .expect("rpc json")["result"]["oldestLedger"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("no oldestLedger from the rpc"));
+    let ledger = oldest as u32 - 1_000;
+
+    let from_api = api.exported(ledger).await.expect("the api's evidence");
+    let from_archive = export(ledger, &options, None)
+        .await
+        .expect("the archive's evidence");
+
+    assert_eq!(
+        serde_json::to_value(&from_api).unwrap(),
+        serde_json::to_value(&from_archive).unwrap(),
+        "ledger {ledger}"
+    );
+}
