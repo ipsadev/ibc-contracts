@@ -75,6 +75,9 @@ jobs:
             curl -L https://sp1.succinct.xyz | bash
             ~/.sp1/bin/sp1up --version ${{ env.SP1_VERSION }} --token ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Put cargo-prove on the path
+        run: echo "$HOME/.sp1/bin" >> "$GITHUB_PATH"
+
       - name: Build the guests
         run: |
           for program in update-client membership uc-and-membership; do
@@ -205,10 +208,12 @@ jobs:
       - name: The genesis config must match the pinned verifying keys
         working-directory: .
         run: |
-          cargo run --release --locked -p sp1-stellar-prover --bin genesis
+          ROUTER_CONTRACT_ID=CBA7QRXNLV2VGXNB7JALC4ZRPD4Q3SFAJRXFS3NTUJBFLLIDT6AEECSS \
+            cargo run --release --locked -p sp1-stellar-prover --bin genesis -- \
+            packages/stellar-light-client/fixtures/testnet-5541000.json
           if ! git diff --quiet ibc-solidity/scripts/deployments/stellar/genesis.json; then
             echo "::error::scripts/deployments/stellar/genesis.json is stale."
-            echo "Regenerate it: cargo run -p sp1-stellar-prover --bin genesis"
+            echo "Regenerate it with the command above."
             git diff ibc-solidity/scripts/deployments/stellar/genesis.json
             exit 1
           fi
