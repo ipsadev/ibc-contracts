@@ -57,7 +57,7 @@ fn main() {
 
         let elf_bytes = std::fs::read(&elf_path).unwrap_or_else(|error| {
             panic!(
-                "cannot read {}: {error}\nbuild it first: (cd {} && cargo prove build --locked)",
+                "cannot read {}: {error}\nbuild it first: (cd {} && cargo prove build --docker --tag v6.1.0 --workspace-directory <repository root> --locked)",
                 elf_path.display(),
                 elf_path.ancestors().nth(5).unwrap_or(&elf_path).display()
             )
