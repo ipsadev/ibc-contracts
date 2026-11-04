@@ -178,11 +178,12 @@ impl StellarApi {
             .map_err(|error| anyhow!("the results of ledger {ledger}: {error}"))?;
 
         let next_envelopes = hex_list(&next_scp, "envelopes_xdr")?;
+        let next_quorum_sets = hex_list(&next_scp, "quorum_sets_xdr")?;
         let next_value = externalized_value(
             following,
             self.network.id(),
             &next_envelopes,
-            &hex_list(&next_scp, "quorum_sets_xdr")?,
+            &next_quorum_sets,
         )
         .map_err(|error| anyhow!("ledger {following}'s consensus: {error}"))?;
         steps::verify_next_slot_binding(&next_value, &next_tx_set, &verified.ledger_hash)
@@ -201,7 +202,8 @@ impl StellarApi {
             envelopes_xdr: input.envelopes_xdr.iter().map(hex::encode).collect(),
             next_envelopes_xdr: next_envelopes.iter().map(hex::encode).collect(),
             next_tx_set_xdr: hex::encode(&next_tx_set),
-            result_pairs_xdr: input.result_pairs_xdr.iter().map(hex::encode).collect(),
+            next_quorum_sets_xdr: next_quorum_sets.iter().map(hex::encode).collect(),
+            result_pairs_xdr: Some(input.result_pairs_xdr.iter().map(hex::encode).collect()),
         })
     }
 }

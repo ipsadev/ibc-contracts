@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-mod archive;
-mod evidence;
 mod evm;
 pub mod gateway;
 pub mod soroban;
@@ -51,8 +49,6 @@ use stellar_light_client_solidity_types::{
 use tonic::{Request, Response, Status};
 
 use crate::{
-    archive::Archive,
-    evidence::Evidence,
     evm::{consensus_hash_of, Evm},
     soroban::{bytes, field, packet, router_events, text, unsigned, RouterEvent, SorobanRpc},
     stellar_api::StellarApi,
@@ -65,10 +61,7 @@ pub struct StellarToEthProofApiModule;
 pub struct StellarToEthConfiguration {
     pub soroban_rpc_url: String,
     pub stellar_network: String,
-    #[serde(default)]
-    pub archive_urls: Option<Vec<String>>,
-    #[serde(default)]
-    pub stellar_api_url: Option<String>,
+    pub stellar_api_url: String,
     pub soroban_router: String,
     pub eth_rpc_url: String,
     pub ics26_address: Address,
@@ -110,7 +103,7 @@ const fn default_checkpoint_timeout() -> u64 {
 
 struct StellarToEthService {
     soroban: SorobanRpc,
-    evidence: Evidence,
+    evidence: StellarApi,
     evm: Evm,
     router: [u8; 32],
     router_strkey: String,
@@ -434,24 +427,22 @@ impl StellarToEthService {
         let evm = Evm::connect(&configuration.eth_rpc_url, configuration.ics26_address).await?;
         let chain_id = evm.chain_id().await?;
         let timeout = Duration::from_secs(configuration.checkpoint_timeout_seconds);
-        let evidence = match configuration.stellar_api_url.as_deref() {
-            Some(url) if !url.is_empty() => {
-                tracing::info!(
-                    url,
-                    "reading Stellar's consensus evidence from the ipsa api"
-                );
-                Evidence::Api(StellarApi::new(
-                    url,
-                    &configuration.stellar_network,
-                    timeout,
-                )?)
-            }
-            _ => Evidence::Archive(Archive::new(
-                &configuration.stellar_network,
-                configuration.archive_urls.clone(),
-                timeout,
-            )?),
-        };
+        if configuration.stellar_api_url.trim().is_empty() {
+            bail!(
+                "stellar_api_url must name the ipsa api that serves Stellar's consensus evidence"
+            );
+        }
+
+        tracing::info!(
+            url = configuration.stellar_api_url,
+            "reading Stellar's consensus evidence from the ipsa api"
+        );
+
+        let evidence = StellarApi::new(
+            &configuration.stellar_api_url,
+            &configuration.stellar_network,
+            timeout,
+        )?;
 
         let history = ProofHistory::from_env();
 

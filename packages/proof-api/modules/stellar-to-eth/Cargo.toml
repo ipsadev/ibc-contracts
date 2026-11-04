@@ -10,9 +10,9 @@ proof-api-core                      = { workspace = true, default-features = fal
 ibc-eureka-solidity-types           = { workspace = true, features = ["rpc"] }
 stellar-light-client-solidity-types = { workspace = true }
 sp1-stellar-prover                  = { workspace = true }
-ipsa-scp-exporter                   = { package = "ipsa-scp-verifier", version = "2.0.0", default-features = false, features = ["io"] }
+ipsa-scp-exporter                   = { package = "ipsa-scp-verifier", version = "3.1.0", default-features = false, features = ["io"] }
 
-stellar-xdr = { version = "28.0.0", default-features = false, features = ["std", "base64"] }
+stellar-xdr = { version = "30.0.0", default-features = false, features = ["std", "base64"] }
 
 alloy      = { workspace = true, features = ["full", "reqwest-rustls-tls"] }
 reqwest    = { workspace = true, features = ["json", "rustls-tls"] }
@@ -31,4 +31,4 @@ tracing    = { workspace = true, default-features = true }
 serde_json = { workspace = true, features = ["std"] }
 tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
 reqwest    = { workspace = true, features = ["json", "rustls-tls"] }
-ipsa-scp-exporter = { package = "ipsa-scp-verifier", version = "2.0.0", default-features = false, features = ["io"] }
+ipsa-scp-exporter = { package = "ipsa-scp-verifier", version = "3.1.0", default-features = false, features = ["io"] }
