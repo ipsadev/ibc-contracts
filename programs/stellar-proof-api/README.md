@@ -10,6 +10,8 @@ The proof API for ipsa's Stellar corridors. It serves `RelayByTx` on port 3100 w
 
 `start --config <file>` reads a JSON config such as `testnet.json`. When `PROOF_API_CONFIG_JSON` is set and not blank, its contents are used instead and the file is never opened, so the service can run where no file can be mounted.
 
+The config may name environment variables as `${NAME}` (upper-case letters, digits and underscores), and each is replaced by that variable's value before the JSON is parsed. This keeps secrets such as a keyed RPC URL out of the config: staging sets `"eth_rpc_url": "${EVM_RPC_URL}"` and passes `EVM_RPC_URL` as a secret. The service refuses to start when a named variable is unset, or when a placeholder is unclosed or not a valid name. A `$` not followed by `{` is left as it is. `tests/expand_environment.rs` covers these cases.
+
 SP1 settings come from the environment: `SP1_PROVER=network`, `SP1_PROOF_MODE=groth16`, and `NETWORK_PRIVATE_KEY`, the Succinct prover network key that pays for proofs in PROVE.
 
 Program paths in the config are relative to the working directory.
