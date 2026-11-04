@@ -415,3 +415,25 @@ fn a_tampered_next_slot_transaction_set_is_rejected() {
 
     assert!(matches!(error, UpdateClientError::NextSlotBindingFailed(_)));
 }
+
+#[test]
+fn a_protocol_30_testnet_ledger_with_a_millisecond_close_time_verifies() {
+    let case = load("testnet-5541000.json");
+
+    let output = run(&case).expect("the Protocol 30 fixture should verify");
+
+    assert_eq!(
+        output.newConsensusState.ledgerHash.0,
+        decode32(&case.fixture.ledger_hash)
+    );
+    assert_eq!(output.newConsensusState.closeTime, case.fixture.close_time);
+    assert_eq!(
+        output.newConsensusState.bucketListHash.0,
+        decode32(&case.fixture.bucket_list_hash)
+    );
+    assert_eq!(
+        output.newConsensusState.previousLedgerHash.0,
+        decode32(&case.fixture.previous_ledger_hash)
+    );
+    assert_eq!(output.newHeight.revisionHeight, 5_541_000);
+}

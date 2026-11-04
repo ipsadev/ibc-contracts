@@ -11,6 +11,7 @@
       "config": {
         "soroban_rpc_url": "https://soroban-testnet.stellar.org",
         "stellar_network": "testnet",
+        "stellar_api_url": "https://api.ipsa.dev",
         "soroban_router": "CBA7QRXNLV2VGXNB7JALC4ZRPD4Q3SFAJRXFS3NTUJBFLLIDT6AEECSS",
         "eth_rpc_url": "https://ethereum-sepolia-rpc.publicnode.com",
         "ics26_address": "0x3f09B9D0E8453C91FBA256F8e2A39A7200D7604B",

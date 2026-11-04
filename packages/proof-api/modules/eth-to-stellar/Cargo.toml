@@ -13,7 +13,7 @@ ethereum-apis             = { workspace = true }
 ethereum-light-client     = { workspace = true }
 ethereum-types            = { workspace = true }
 
-stellar-xdr = { version = "28.0.0", default-features = false, features = ["std", "base64"] }
+stellar-xdr = { version = "30.0.0", default-features = false, features = ["std", "base64"] }
 
 alloy      = { workspace = true, features = ["full", "reqwest-rustls-tls"] }
 reqwest    = { workspace = true, features = ["json", "rustls-tls"] }

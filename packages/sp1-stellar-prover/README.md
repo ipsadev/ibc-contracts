@@ -76,7 +76,7 @@ cargo run --release -p sp1-stellar-prover --bin packet
 ```
 
 - `fixture` writes `ibc-solidity/test/sp1-stellar/fixtures/stellar.json` from the mainnet fixture.
-- `genesis` writes `ibc-solidity/scripts/deployments/stellar/genesis.json` from the mainnet fixture and the pinned verifying keys.
+- `genesis` writes `ibc-solidity/scripts/deployments/stellar/genesis.json` from a fixture (the mainnet one by default), the Soroban router in `ROUTER_CONTRACT_ID`, and the pinned verifying keys. The committed file is the genesis of the Protocol 30 client on Sepolia, testnet ledger 5541000 against router `CBA7QRXNLV2VGXNB7JALC4ZRPD4Q3SFAJRXFS3NTUJBFLLIDT6AEECSS`, and CI regenerates it with exactly that fixture and router.
 - `packet` proves a real testnet packet against `scripts/deployments/stellar/sepolia-testnet.json` and exports the update and membership proofs the Solidity proof tests replay.
 
 The `solidity-client` job fails if `fixture` or `genesis` would change a committed file.

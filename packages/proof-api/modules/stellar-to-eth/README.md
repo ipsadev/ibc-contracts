@@ -19,15 +19,15 @@ Given one Stellar transaction hash:
    an existing client id at a new Soroban router, that router's sequences start
    again at 1 under the same id. Then reads the EVM client behind `dst_client_id`
    and refuses unless it pins this module's Soroban router.
-3. Waits for the history archive to publish the checkpoint holding the ledger
-   **and its successor** — the next-slot binding needs ledger + 1.
-4. Exports and verifies both the packet's ledger and the client's latest ledger
-   through `ipsa-scp-verifier`'s `api::export` (all eight steps plus the
-   result-set check).
-5. Rebuilds the client's trusted consensus state from the archived ledger. The
+3. Waits until the ipsa api holds the SCP messages of the ledger **and its
+   successor**: the next-slot binding needs ledger + 1.
+4. Assembles and verifies both the packet's ledger and the client's latest ledger
+   from the api (all eight steps plus the result-set check), with
+   `ipsa-scp-verifier`.
+5. Rebuilds the client's trusted consensus state from the verified ledger. The
    client stores only `keccak256(abi.encode(consensusState))`, so the rebuilt
    state is refused unless it hashes to the stored value.
-6. Builds the membership witness: the archived result pair, the success preimage
+6. Builds the membership witness: the ledger's result pair, the success preimage
    rebuilt from the transaction meta, the value the transaction wrote at the
    packet's path, and the path's 64 sparse Merkle siblings, folded to the
    published `ibc_root`. The committed value must equal what the EVM router
@@ -70,9 +70,7 @@ Given one Stellar transaction hash:
 **`gateway_grpc_address`** is required to relay packets: without it every
 request fails before proving, with a message that says why.
 
-`archive_urls` overrides the network's default archive, and `checkpoint_timeout_seconds` (default 1200) bounds the wait in step 3.
-
-**`stellar_api_url`** points the module at an ipsa api (for example `https://api.ipsa.dev`) instead of the history archive. The archive publishes a ledger's SCP messages only with its checkpoint of 64 ledgers, so step 3 waits up to about five and a half minutes; an api backed by a stellar-core watcher serves them as the ledger closes, so the wait drops to seconds. The module then reads the SCP messages from `/archive/scp/{ledger}`, the header from `/archive/ledger-header/{ledger}`, the next ledger's transaction set from `/archive/tx-set/{ledger}`, and the transaction results from the close metadata of `/ledger/{ledger}`, and runs the same checks the archive export runs before proving: the header against its SCP messages, the results against the header, and the next slot against the ledger's hash. The api adds no trust, since every message is checked against the validators' signatures. `checkpoint_timeout_seconds` bounds the wait for the api as it does for the archive. `tests/stellar_api.rs` checks, when `STELLAR_LIVE_API_URL` is set, that the api yields exactly the archive's evidence for an archived ledger, and assembles a ledger the archive has not published yet.
+**`stellar_api_url`** is required: the ipsa api (for example `https://api.ipsa.dev`) that serves Stellar's consensus evidence. An api backed by a stellar-core watcher serves a ledger's SCP messages as it closes, where the history archive publishes them only with its checkpoint of 64 ledgers. The module reads the SCP messages from `/archive/scp/{ledger}`, the header from `/archive/ledger-header/{ledger}`, the next ledger's transaction set from `/archive/tx-set/{ledger}`, and the transaction results from the close metadata of `/ledger/{ledger}`, or from `/archive/results/{ledger}` once Soroban RPC no longer keeps the ledger. Before proving it checks the header against its SCP messages, the results against the header, and the next slot against the ledger's hash, so the api adds no trust. `checkpoint_timeout_seconds` (default 1200) bounds the wait in step 3. The module used to read the history archive directly when no api was set; that path was removed with the move to Protocol 30, because `ipsa-scp-verifier` 3 no longer exports evidence from the archive. `tests/stellar_api.rs` checks, when `STELLAR_LIVE_API_URL` is set, that the api's evidence verifies for a ledger the archive has published, one it has not, and one Soroban RPC no longer keeps.
 
 **`prover`** is `network` (default) or `execute`. `execute` is a free dry run:
 it does every step up to proving, executes both guests on the CPU, logs the cycle
@@ -92,19 +90,11 @@ Succinct requester account whose deposited PROVE pays for the proofs.
 
 ## The `ipsa-scp-verifier` dependency
 
-The exporter comes from the sibling checkout, as `ipsa-scp-exporter`, because
-`api::export` is not yet published. Only this module uses it. The Stellar guests
-keep `ipsa-scp-verifier` 1.0.0 from crates.io: repointing the workspace entry
-would recompile them and move every verifying key. The path dependency is
-replaced by the published version before the corridor is committed.
+The module checks evidence with `ipsa-scp-verifier` 3.1.0 from crates.io (as `ipsa-scp-exporter`), and the Stellar guests use the same version through the workspace entry. 3.1.0 sits on `stellar-consensus-verifier` 1.1.0, which reads Protocol 30's millisecond close times (CAP-88); 1.0 refused every header since testnet's upgrade at ledger 5540313. Moving the guests onto it recompiled them and moved all three Stellar verifying keys (`ibc-solidity/programs/sp1-stellar-programs/vkeys.json`), so the deployed `SP1ICSStellar`, whose keys are immutable, has to be replaced by one built with the new keys.
 
 ## XDR version
 
-Transaction meta is decoded with `stellar-xdr` 28, and the exporter uses 28 too.
-Protocol 28 ledgers carry transaction sets that 27 cannot decode, and the
-exporter decodes every set in a checkpoint to find each one's byte span, so a
-single such ledger made its whole checkpoint unexportable. The guests do not
-decode sets and are unaffected.
+Transaction meta and ledger headers are decoded with `stellar-xdr` 30, which knows Protocol 30's `StellarValue` kinds 3 and 4. 28 and earlier fail on every ledger since the upgrade.
 
 ## Tests
 
