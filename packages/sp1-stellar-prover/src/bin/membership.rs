@@ -60,7 +60,7 @@ fn main() {
 
     let elf_bytes = std::fs::read(&elf_path).unwrap_or_else(|error| {
         panic!(
-            "cannot read the membership ELF at {}: {error}\nbuild it with: cd ibc-solidity/programs/sp1-stellar-programs/membership && cargo prove build --locked",
+            "cannot read the membership ELF at {}: {error}\nbuild it with: cd ibc-solidity/programs/sp1-stellar-programs/membership && cargo prove build --docker --tag v6.1.0 --workspace-directory ../../../.. --locked",
             elf_path.display()
         )
     });

@@ -6,12 +6,14 @@ Host-side harness for the Stellar SP1 light client: builds a witness from a pinn
 
 ```sh
 for program in update-client membership uc-and-membership; do
-  (cd "ibc-solidity/programs/sp1-stellar-programs/$program" && cargo prove build --locked)
+  (cd "ibc-solidity/programs/sp1-stellar-programs/$program" && cargo prove build --docker --tag v6.1.0 --workspace-directory ../../../.. --output-directory target/elf-compilation/riscv64im-succinct-zkvm-elf/release --locked)
 done
 for program in update-client membership; do
-  (cd "programs/sp1-ethereum-programs/$program" && cargo prove build --locked)
+  (cd "programs/sp1-ethereum-programs/$program" && cargo prove build --docker --tag v6.1.0 --workspace-directory ../../.. --output-directory target/elf-compilation/riscv64im-succinct-zkvm-elf/release --locked)
 done
 ```
+
+`--docker` compiles inside SP1's `ghcr.io/succinctlabs/sp1:v6.1.0` image, so every machine gets the same ELF and therefore the same verifying key. A host build embeds the host's paths and toolchain, and a macOS build and CI's Linux build gave different keys for all five programs. `--workspace-directory` mounts the repository root, because the guests depend on crates outside their own directories. A Docker build writes its ELF under `target/elf-compilation/docker/`, so `--output-directory` copies it to the usual path, where the binaries here and the proof API image read it. Build with Docker before pinning keys or making proofs that will be verified on chain.
 
 Each guest is its own Cargo workspace with its own `[patch.crates-io]`, so its ELF lands under that directory's own `target/elf-compilation/riscv64im-succinct-zkvm-elf/release/`. The binaries here read it from there, or from `SP1_STELLAR_ELF` (update-client) and `SP1_STELLAR_MEMBERSHIP_ELF` (membership).
 
