@@ -266,6 +266,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "crate-git-revision"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54851b5b3f24621804b1cded2820975623c205e3055d2d44031cdb1237339ac8"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
 name = "critical-section"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -577,10 +588,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "hash32"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47d60b12902ba28e2730cd37e95b8c9223af2808df9e902d4df49588d1470606"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+
+[[package]]
+name = "heapless"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25ba4bd83f9415b58b4ed8dc5714c76e626a105be4646c02630ad730ad3b5aa4"
+dependencies = [
+ "hash32",
+ "stable_deref_trait",
+ "zeroize",
+]
 
 [[package]]
 name = "heck"
@@ -633,9 +664,9 @@ dependencies = [
 
 [[package]]
 name = "ipsa-scp-verifier"
-version = "1.0.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c679738b4bf433bc17885e23887dd4ee0d7076e09aaffcc96a3302d4e6a76d2d"
+checksum = "d19e91227066f47a64880b88a0c70fa29f57e2be1d99cc939bc3da89279d524e"
 dependencies = [
  "ed25519-dalek",
  "hex",
@@ -643,7 +674,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "stellar-consensus-verifier",
- "stellar-strkey",
+ "stellar-strkey 0.0.13",
  "stellar-xdr",
  "thiserror 1.0.69",
 ]
@@ -1369,10 +1400,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "stellar-consensus-verifier"
-version = "1.0.0"
+name = "stable_deref_trait"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47635ac44720787812ea5a1012e7e7b358ea4f48866c4807da1007f684595390"
+checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
+
+[[package]]
+name = "stellar-consensus-verifier"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63e2c131f5dda60f6d08ba1ba1a826d791707687ec45df6ec8f0b00cd766a40d"
 dependencies = [
  "ed25519-dalek",
  "sha2",
@@ -1404,22 +1441,34 @@ version = "0.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee1832fb50c651ad10f734aaf5d31ca5acdfb197a6ecda64d93fcdb8885af913"
 dependencies = [
- "crate-git-revision",
+ "crate-git-revision 0.0.6",
  "data-encoding",
 ]
 
 [[package]]
-name = "stellar-xdr"
-version = "27.0.0"
+name = "stellar-strkey"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05ff843326969bdf1ef673dcdba94c08f4a3c8f1e58d6e6ef39b1bd4f749179a"
+checksum = "5038ed2bf4e11842210d118f65791d8ca4747622daddd222338b3d06b6051bc1"
 dependencies = [
- "crate-git-revision",
+ "crate-git-revision 0.0.9",
+ "data-encoding",
+ "heapless",
+ "zeroize",
+]
+
+[[package]]
+name = "stellar-xdr"
+version = "30.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56f2fb2008b42fc746c0f6b46e375600068dd91f07748e9f1737c6341a2255f2"
+dependencies = [
+ "crate-git-revision 0.0.9",
  "escape-bytes",
  "ethnum",
  "hex",
  "sha2",
- "stellar-strkey",
+ "stellar-strkey 1.0.0",
 ]
 
 [[package]]
@@ -1647,6 +1696,20 @@ name = "zeroize"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
+dependencies = [
+ "zeroize_derive",
+]
+
+[[package]]
+name = "zeroize_derive"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c50655cbb0fe3fc43170059e702f1ce5e19b84cec58dc87b037a09935c2f328"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "zmij"
