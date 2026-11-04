@@ -81,10 +81,10 @@ jobs:
       - name: Build the guests
         run: |
           for program in update-client membership uc-and-membership; do
-            (cd "ibc-solidity/programs/sp1-stellar-programs/$program" && cargo prove build --docker --tag "v$SP1_VERSION" --workspace-directory ../../../.. --output-directory target/elf-compilation/riscv64im-succinct-zkvm-elf/release --locked)
+            (cd "ibc-solidity/programs/sp1-stellar-programs/$program" && mkdir -p target/elf-compilation/riscv64im-succinct-zkvm-elf/release && cargo prove build --docker --tag "v$SP1_VERSION" --workspace-directory ../../../.. --output-directory target/elf-compilation/riscv64im-succinct-zkvm-elf/release --locked)
           done
           for program in update-client membership; do
-            (cd "programs/sp1-ethereum-programs/$program" && cargo prove build --docker --tag "v$SP1_VERSION" --workspace-directory ../../.. --output-directory target/elf-compilation/riscv64im-succinct-zkvm-elf/release --locked)
+            (cd "programs/sp1-ethereum-programs/$program" && mkdir -p target/elf-compilation/riscv64im-succinct-zkvm-elf/release && cargo prove build --docker --tag "v$SP1_VERSION" --workspace-directory ../../.. --output-directory target/elf-compilation/riscv64im-succinct-zkvm-elf/release --locked)
           done
 
       - name: The ELFs must be reproducible
@@ -94,7 +94,7 @@ jobs:
             elf="ibc-solidity/programs/sp1-stellar-programs/$program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/sp1-stellar-$program"
             before="$(sha256sum "$elf" | cut -d' ' -f1)"
             touch "packages/stellar-light-client/${program}/src/lib.rs"
-            (cd "ibc-solidity/programs/sp1-stellar-programs/$program" && cargo prove build --docker --tag "v$SP1_VERSION" --workspace-directory ../../../.. --output-directory target/elf-compilation/riscv64im-succinct-zkvm-elf/release --locked)
+            (cd "ibc-solidity/programs/sp1-stellar-programs/$program" && mkdir -p target/elf-compilation/riscv64im-succinct-zkvm-elf/release && cargo prove build --docker --tag "v$SP1_VERSION" --workspace-directory ../../../.. --output-directory target/elf-compilation/riscv64im-succinct-zkvm-elf/release --locked)
             after="$(sha256sum "$elf" | cut -d' ' -f1)"
             if [ "$before" != "$after" ]; then
               echo "::error::$program does not build reproducibly: $before then $after"
@@ -107,7 +107,7 @@ jobs:
             elf="programs/sp1-ethereum-programs/$program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/sp1-ethereum-$program"
             before="$(sha256sum "$elf" | cut -d' ' -f1)"
             touch "programs/sp1-ethereum-programs/$program/src/wire.rs"
-            (cd "programs/sp1-ethereum-programs/$program" && cargo prove build --docker --tag "v$SP1_VERSION" --workspace-directory ../../.. --output-directory target/elf-compilation/riscv64im-succinct-zkvm-elf/release --locked)
+            (cd "programs/sp1-ethereum-programs/$program" && mkdir -p target/elf-compilation/riscv64im-succinct-zkvm-elf/release && cargo prove build --docker --tag "v$SP1_VERSION" --workspace-directory ../../.. --output-directory target/elf-compilation/riscv64im-succinct-zkvm-elf/release --locked)
             after="$(sha256sum "$elf" | cut -d' ' -f1)"
             if [ "$before" != "$after" ]; then
               echo "::error::ethereum-$program does not build reproducibly: $before then $after"
