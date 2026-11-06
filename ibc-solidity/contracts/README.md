@@ -9,6 +9,10 @@ All contracts are compiled for the **Cancun** EVM (`evm_version = "cancun"` in `
 - `ICS20Transfer.sol` – ICS20 fungible token app. It mints/burns `IBCERC20` wrappers for non-native denoms, escrows native tokens per client via `Escrow` beacons, enforces pausing/rate limits, and routes packets through the ICS26 router (supports Permit2 flow).
 - `ICS27GMP.sol` – ICS27 general message passing app. It spawns deterministic `ICS27Account` proxies via a beacon, encodes call payloads, and sends GMP packets through ICS26; acknowledgements feed results back to callers.
 
+## Fast transfer (`fast-transfer/`)
+
+- `FastTransfer.sol` – sends ICS-20 transfers to Stellar as orders a liquidity provider can pay out within a minute, before Ethereum finality, and routes the refund of a failed or timed-out packet to the provider that filled it. It pairs with the Stellar fill contract in `ipsa-contracts`; see [`fast-transfer/README.md`](./fast-transfer/README.md).
+
 ## Utilities (`utils/`)
 - `Escrow.sol` – Per-client token escrow controlled by `ICS20Transfer`; enforces daily rate limits before releasing funds back out.
 - `IBCERC20.sol` – Upgradeable ERC20 minted/burned by `ICS20Transfer` to represent inbound IBC denoms; allows one-time custom metadata.
