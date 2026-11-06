@@ -51,6 +51,20 @@ pub struct ForkParameters {
     pub electra: Fork,
     /// The fulu fork
     pub fulu: Fork,
+    /// The gloas fork, scheduled for the far future when the chain does not define it
+    #[serde(default = "Fork::unscheduled")]
+    pub gloas: Fork,
+}
+
+impl Fork {
+    /// A fork that never activates: version zero at epoch `u64::MAX` (`FAR_FUTURE_EPOCH`)
+    #[must_use]
+    pub const fn unscheduled() -> Self {
+        Self {
+            version: Version::ZERO,
+            epoch: u64::MAX,
+        }
+    }
 }
 
 impl ForkParameters {
@@ -59,6 +73,7 @@ impl ForkParameters {
     #[must_use]
     pub const fn compute_fork_version(&self, epoch: u64) -> Version {
         match epoch {
+            _ if epoch >= self.gloas.epoch => self.gloas.version,
             _ if epoch >= self.fulu.epoch => self.fulu.version,
             _ if epoch >= self.electra.epoch => self.electra.version,
             _ if epoch >= self.deneb.epoch => self.deneb.version,

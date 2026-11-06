@@ -4,7 +4,7 @@
 
 use crate::{
     client_state::ClientState, consensus_state::ConsensusState, error::EthereumIBCError,
-    header::Header,
+    execution::execution_data, header::Header,
 };
 
 /// Takes in the current client and consensus state and a new header and returns the updated
@@ -34,7 +34,7 @@ pub fn update_consensus_state(
     let store_slot = current_consensus_state.slot;
     let store_period = current_client_state.compute_sync_committee_period_at_slot(store_slot);
 
-    let update_finalized_slot = header.consensus_update.finalized_header.beacon.slot;
+    let update_finalized_slot = header.consensus_update.finalized_header.beacon().slot;
     let update_finalized_period =
         current_client_state.compute_sync_committee_period_at_slot(update_finalized_slot);
 
@@ -61,22 +61,27 @@ pub fn update_consensus_state(
             .map(|c| c.to_summarized_sync_committee());
     }
 
+    let execution = execution_data(
+        &header.consensus_update.finalized_header,
+        header.execution_header.as_ref(),
+    )?;
+
+    ensure!(
+        execution.timestamp >= current_consensus_state.timestamp,
+        EthereumIBCError::ExecutionTimestampDecreased {
+            trusted: current_consensus_state.timestamp,
+            new: execution.timestamp,
+        }
+    );
+
     new_consensus_state.slot = update_finalized_slot;
-    new_consensus_state.state_root = header
-        .consensus_update
-        .finalized_header
-        .execution
-        .state_root;
-    new_consensus_state.timestamp = header.consensus_update.finalized_header.execution.timestamp;
+    new_consensus_state.state_root = execution.state_root;
+    new_consensus_state.timestamp = execution.timestamp;
 
     let new_client_state =
         (update_finalized_slot > current_consensus_state.slot).then_some(ClientState {
             latest_slot: update_finalized_slot,
-            latest_execution_block_number: header
-                .consensus_update
-                .finalized_header
-                .execution
-                .block_number,
+            latest_execution_block_number: execution.block_number,
             ..current_client_state
         });
     Ok((update_finalized_slot, new_consensus_state, new_client_state))

@@ -84,7 +84,9 @@ mod test {
     use alloy_primitives::{hex::FromHex, Address, Bloom, Bytes, FixedBytes, B256, U256};
     use ethereum_types::consensus::{
         fork::{Fork, ForkParameters},
-        light_client_header::{BeaconBlockHeader, ExecutionPayloadHeader, LightClientHeader},
+        light_client_header::{
+            BeaconBlockHeader, ElectraLightClientHeader, ExecutionPayloadHeader, LightClientHeader,
+        },
         merkle::{floorlog2, EXECUTION_PAYLOAD_GINDEX},
     };
 
@@ -96,7 +98,7 @@ mod test {
 
     #[test]
     fn test_validate_merkle_branch_with_execution_payload() {
-        let header = LightClientHeader {
+        let electra = ElectraLightClientHeader {
             beacon: BeaconBlockHeader {
                 slot: 10000,
                 proposer_index: 0,
@@ -176,7 +178,10 @@ mod test {
                 version: FixedBytes([6, 0, 0, 1]),
                 epoch: 0,
             },
+            gloas: Fork::unscheduled(),
         };
+
+        let header = LightClientHeader::Electra(electra.clone());
 
         // inputs
         let leaf = get_lc_execution_root(
@@ -190,8 +195,8 @@ mod test {
         .unwrap();
         let depth = floorlog2(EXECUTION_PAYLOAD_GINDEX);
         let index = get_subtree_index(EXECUTION_PAYLOAD_GINDEX);
-        let root = header.beacon.body_root;
+        let root = electra.beacon.body_root;
 
-        validate_merkle_branch(leaf, header.execution_branch.into(), depth, index, root).unwrap();
+        validate_merkle_branch(leaf, electra.execution_branch.into(), depth, index, root).unwrap();
     }
 }

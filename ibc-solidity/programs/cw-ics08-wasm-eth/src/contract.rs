@@ -205,6 +205,7 @@ mod tests {
                         version: FixedBytes([0; 4]),
                         epoch: 0,
                     },
+                    gloas: Fork::unscheduled(),
                 },
                 seconds_per_slot: 10,
                 slots_per_epoch: 8,
@@ -362,7 +363,7 @@ mod tests {
             for header_bz in client_msgs {
                 let header: Header = serde_json::from_slice(&header_bz).unwrap();
                 env.block.time = Timestamp::from_seconds(
-                    header.consensus_update.attested_header.execution.timestamp + 1000,
+                    header.consensus_update.attested_header.execution().unwrap().timestamp + 1000,
                 );
 
                 let query_verify_client_msg =
@@ -382,7 +383,7 @@ mod tests {
                 assert_eq!(1, update_state_result.heights.len());
                 assert_eq!(0, update_state_result.heights[0].revision_number);
                 assert_eq!(
-                    header.consensus_update.finalized_header.beacon.slot,
+                    header.consensus_update.finalized_header.beacon().slot,
                     update_state_result.heights[0].revision_height
                 );
             }
@@ -506,7 +507,7 @@ mod tests {
                 let header_manipulated = serde_json::to_vec(&header).unwrap();
 
                 env.block.time = Timestamp::from_seconds(
-                    header.consensus_update.attested_header.execution.timestamp + 1000,
+                    header.consensus_update.attested_header.execution().unwrap().timestamp + 1000,
                 );
 
                 let query_verify_client_msg =
@@ -613,7 +614,7 @@ mod tests {
                 let header_manipulated = serde_json::to_vec(&header).unwrap();
 
                 env.block.time = Timestamp::from_seconds(
-                    header.consensus_update.attested_header.execution.timestamp + 1000,
+                    header.consensus_update.attested_header.execution().unwrap().timestamp + 1000,
                 );
 
                 let query_verify_client_msg =
@@ -683,7 +684,7 @@ mod tests {
             for header_bz in client_msgs {
                 let header: Header = serde_json::from_slice(&header_bz).unwrap();
                 env.block.time = Timestamp::from_seconds(
-                    header.consensus_update.attested_header.execution.timestamp + 1000,
+                    header.consensus_update.attested_header.execution().unwrap().timestamp + 1000,
                 );
 
                 let query_verify_client_msg =
@@ -703,7 +704,7 @@ mod tests {
                 assert_eq!(1, update_state_result.heights.len());
                 assert_eq!(0, update_state_result.heights[0].revision_number);
                 assert_eq!(
-                    header.consensus_update.finalized_header.beacon.slot,
+                    header.consensus_update.finalized_header.beacon().slot,
                     update_state_result.heights[0].revision_height
                 );
             }
@@ -808,6 +809,7 @@ mod tests {
                         version: FixedBytes([0; 4]),
                         epoch: 0,
                     },
+                    gloas: Fork::unscheduled(),
                 },
                 sync_committee_size: 512,
                 seconds_per_slot: 10,
@@ -920,6 +922,7 @@ mod tests {
                         version: FixedBytes([0; 4]),
                         epoch: 0,
                     },
+                    gloas: Fork::unscheduled(),
                 },
                 sync_committee_size: 512,
                 seconds_per_slot: 10,
@@ -980,6 +983,7 @@ mod tests {
                         version: FixedBytes([0; 4]),
                         epoch: 0,
                     },
+                    gloas: Fork::unscheduled(),
                 }),
             };
 

@@ -1,0 +1,22 @@
+[package]
+name        = "stellar-light-client-update-client"
+description = "Update client program for the Stellar light client"
+version     = { workspace = true }
+edition     = { workspace = true }
+repository  = { workspace = true }
+license     = { workspace = true }
+
+[dependencies]
+ipsa-scp-verifier                   = { workspace = true }
+stellar-light-client-solidity-types = { workspace = true }
+
+alloy-sol-types = { workspace = true }
+hex             = { workspace = true }
+sha2            = { workspace = true }
+thiserror       = { workspace = true }
+
+[dev-dependencies]
+hex        = { workspace = true }
+serde      = { workspace = true, features = ["derive"] }
+sha2       = { workspace = true }
+serde_json = { workspace = true, features = ["std"] }

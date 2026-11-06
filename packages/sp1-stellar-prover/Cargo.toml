@@ -1,0 +1,22 @@
+[package]
+name        = "sp1-stellar-prover"
+description = "Host prover and differential harness for the Stellar SP1 light client"
+version     = { workspace = true }
+edition     = { workspace = true }
+repository  = { workspace = true }
+license     = { workspace = true }
+
+[dependencies]
+stellar-light-client-update-client = { workspace = true }
+stellar-light-client-membership    = { workspace = true, features = ["scenario"] }
+stellar-light-client-solidity-types = { workspace = true }
+ipsa-scp-verifier                  = { workspace = true }
+
+sp1-sdk = { workspace = true, features = ["blocking", "network"] }
+
+alloy-sol-types = { workspace = true }
+hex             = { workspace = true }
+anyhow          = { workspace = true, features = ["std"] }
+sha2            = { workspace = true }
+serde           = { workspace = true, features = ["derive"] }
+serde_json      = { workspace = true, features = ["std"] }
