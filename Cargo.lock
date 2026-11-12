@@ -6552,9 +6552,9 @@ checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
 
 [[package]]
 name = "ipsa-scp-verifier"
-version = "3.1.0"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d19e91227066f47a64880b88a0c70fa29f57e2be1d99cc939bc3da89279d524e"
+checksum = "f4dc7b5efb0e43d0fcd268cd574b9cb3ea76e89da15ee15a2c75a6f8998f44a5"
 dependencies = [
  "ed25519-dalek 2.2.0",
  "flate2",
@@ -14931,9 +14931,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stellar-consensus-verifier"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63e2c131f5dda60f6d08ba1ba1a826d791707687ec45df6ec8f0b00cd766a40d"
+checksum = "9da06c61b6d07a4ab8338f66f3cb0f67839f9589700da6ca8fe01e6acbcb98c6"
 dependencies = [
  "ed25519-dalek 2.2.0",
  "sha2 0.10.9",
