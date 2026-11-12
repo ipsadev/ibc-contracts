@@ -43,3 +43,7 @@ milagro_bls = { workspace = true }
 ibc-proto-eureka = { workspace = true }
 prost = { workspace = true }
 ibc-eureka-solidity-types = { workspace = true }
+
+[[test]]
+name = "gloas"
+required-features = ["test-utils"]

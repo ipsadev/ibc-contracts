@@ -62,6 +62,17 @@ pub struct Spec {
     /// The fulu fork epoch.
     #[serde_as(as = "DisplayFromStr")]
     pub fulu_fork_epoch: u64,
+    /// The gloas fork version, zero when the chain does not define it.
+    #[serde(default)]
+    pub gloas_fork_version: Version,
+    /// The gloas fork epoch, `u64::MAX` when the chain does not define it.
+    #[serde_as(as = "DisplayFromStr")]
+    #[serde(default = "far_future_epoch")]
+    pub gloas_fork_epoch: u64,
+}
+
+const fn far_future_epoch() -> u64 {
+    u64::MAX
 }
 
 impl Spec {
@@ -100,6 +111,10 @@ impl Spec {
             fulu: Fork {
                 version: self.fulu_fork_version,
                 epoch: self.fulu_fork_epoch,
+            },
+            gloas: Fork {
+                version: self.gloas_fork_version,
+                epoch: self.gloas_fork_epoch,
             },
         }
     }

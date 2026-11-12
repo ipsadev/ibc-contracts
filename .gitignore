@@ -56,3 +56,4 @@ solana-keypairs/**/*
 !solana-keypairs/localnet/
 !solana-keypairs/localnet/**
 !solana-keypairs/**/.gitkeep
+__pycache__/

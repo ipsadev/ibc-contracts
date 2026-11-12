@@ -1,0 +1,24 @@
+[package]
+name        = "sp1-ethereum-prover"
+description = "Fetch beacon fixtures and drive the Ethereum update-client guest"
+version     = { workspace = true }
+edition     = { workspace = true }
+repository  = { workspace = true }
+license     = { workspace = true }
+
+[dependencies]
+ethereum-apis        = { workspace = true }
+ethereum-light-client = { workspace = true }
+ethereum-types       = { workspace = true }
+
+alloy-primitives = { workspace = true }
+alloy-rlp        = { workspace = true }
+alloy-rpc-types-eth = { workspace = true, features = ["serde"] }
+anyhow           = { workspace = true }
+hex              = { workspace = true, features = ["alloc"] }
+reqwest          = { workspace = true, features = ["rustls-tls"] }
+serde            = { workspace = true }
+sha2             = { workspace = true }
+sp1-sdk          = { workspace = true, features = ["blocking", "network"] }
+serde_json       = { workspace = true }
+tokio            = { workspace = true, features = ["full"] }

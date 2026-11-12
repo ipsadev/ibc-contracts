@@ -2,6 +2,7 @@
 
 //! This module defines types related to the Header we use for the Ethereum light client
 
+use alloy_primitives::Bytes;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +20,11 @@ pub struct Header {
     /// Trusted slot to verify the new update against
     // The client **must** have a consensus state for the provided slot
     pub trusted_slot: u64,
+    /// The RLP encoded execution block header the finalized header commits to.
+    /// Required from gloas on, where light client headers carry only the execution block hash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<String>")]
+    pub execution_header: Option<Bytes>,
 }
 
 /// The active sync committee

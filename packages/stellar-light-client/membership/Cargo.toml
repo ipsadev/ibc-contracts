@@ -1,0 +1,24 @@
+[package]
+name        = "stellar-light-client-membership"
+description = "Verify (non)membership against the Stellar IBC router's state root"
+version     = { workspace = true }
+edition     = { workspace = true }
+repository  = { workspace = true }
+license     = { workspace = true }
+
+[features]
+default = []
+scenario = []
+
+[dependencies]
+ipsa-scp-verifier                   = { workspace = true }
+stellar-light-client-solidity-types = { workspace = true }
+
+alloy-sol-types = { workspace = true }
+hex             = { workspace = true }
+sha2            = { workspace = true }
+thiserror       = { workspace = true }
+
+[dev-dependencies]
+stellar-light-client-membership = { path = ".", features = ["scenario"] }
+serde_json = { workspace = true }
