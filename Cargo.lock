@@ -3735,17 +3735,6 @@ dependencies = [
 
 [[package]]
 name = "crate-git-revision"
-version = "0.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c521bf1f43d31ed2f73441775ed31935d77901cb3451e44b38a1c1612fcbaf98"
-dependencies = [
- "serde",
- "serde_derive",
- "serde_json",
-]
-
-[[package]]
-name = "crate-git-revision"
 version = "0.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54851b5b3f24621804b1cded2820975623c205e3055d2d44031cdb1237339ac8"
@@ -4575,10 +4564,8 @@ checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
 dependencies = [
  "curve25519-dalek 4.1.3",
  "ed25519 2.2.3",
- "serde",
  "sha2 0.10.9",
  "subtle",
- "zeroize",
 ]
 
 [[package]]
@@ -6646,27 +6633,6 @@ name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
-
-[[package]]
-name = "ipsa-scp-verifier"
-version = "4.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4dc7b5efb0e43d0fcd268cd574b9cb3ea76e89da15ee15a2c75a6f8998f44a5"
-dependencies = [
- "ed25519-dalek 2.2.0",
- "flate2",
- "futures",
- "hex",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "stellar-consensus-verifier",
- "stellar-strkey 0.0.13",
- "stellar-xdr",
- "thiserror 1.0.69",
- "tokio",
-]
 
 [[package]]
 name = "iri-string"
@@ -9097,7 +9063,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "hex",
- "rustls 0.23.40",
+ "rustls 0.23.46",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -9106,7 +9072,7 @@ dependencies = [
  "tokio-postgres",
  "tokio-postgres-rustls",
  "tracing",
- "webpki-roots 1.0.7",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
@@ -9210,15 +9176,16 @@ dependencies = [
  "anyhow",
  "hex",
  "ibc-eureka-solidity-types 0.1.0",
- "ipsa-scp-verifier",
  "proof-api-core",
  "proof-api-history",
- "prost",
+ "prost 0.13.5",
  "reqwest 0.12.28",
+ "scp-exporter",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "sp1-stellar-prover",
+ "stellar-consensus-verifier",
  "stellar-light-client-solidity-types",
  "stellar-xdr",
  "tokio",
@@ -9282,7 +9249,7 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -10397,6 +10364,21 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "scp-exporter"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf53569128b36c5eb704a880ff054e36041bc1c11611f400f161db16b0203613"
+dependencies = [
+ "flate2",
+ "hex",
+ "reqwest 0.12.28",
+ "serde_json",
+ "sha2 0.10.9",
+ "stellar-xdr",
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "sct"
@@ -14630,11 +14612,11 @@ dependencies = [
  "alloy-sol-types",
  "anyhow",
  "hex",
- "ipsa-scp-verifier",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "sp1-sdk 6.9.0",
+ "stellar-consensus-verifier",
  "stellar-light-client-membership",
  "stellar-light-client-solidity-types",
  "stellar-light-client-update-client",
@@ -15096,13 +15078,13 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stellar-consensus-verifier"
-version = "1.1.1"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9da06c61b6d07a4ab8338f66f3cb0f67839f9589700da6ca8fe01e6acbcb98c6"
+checksum = "826e6d63237460185c48f23bdca5162f45cb6fe869a77fd7363897e77ad4ac25"
 dependencies = [
  "ed25519-dalek 2.2.0",
  "sha2 0.10.9",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -15111,9 +15093,9 @@ version = "0.1.0"
 dependencies = [
  "alloy-sol-types",
  "hex",
- "ipsa-scp-verifier",
  "serde_json",
  "sha2 0.10.9",
+ "stellar-consensus-verifier",
  "stellar-light-client-membership",
  "stellar-light-client-solidity-types",
  "thiserror 2.0.18",
@@ -15145,10 +15127,10 @@ version = "0.1.0"
 dependencies = [
  "alloy-sol-types",
  "hex",
- "ipsa-scp-verifier",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "stellar-consensus-verifier",
  "stellar-light-client-solidity-types",
  "thiserror 2.0.18",
 ]
@@ -15171,21 +15153,11 @@ dependencies = [
 
 [[package]]
 name = "stellar-strkey"
-version = "0.0.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee1832fb50c651ad10f734aaf5d31ca5acdfb197a6ecda64d93fcdb8885af913"
-dependencies = [
- "crate-git-revision 0.0.6",
- "data-encoding",
-]
-
-[[package]]
-name = "stellar-strkey"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5038ed2bf4e11842210d118f65791d8ca4747622daddd222338b3d06b6051bc1"
 dependencies = [
- "crate-git-revision 0.0.9",
+ "crate-git-revision",
  "data-encoding",
  "heapless",
  "zeroize",
@@ -15198,12 +15170,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56f2fb2008b42fc746c0f6b46e375600068dd91f07748e9f1737c6341a2255f2"
 dependencies = [
  "base64 0.22.1",
- "crate-git-revision 0.0.9",
+ "crate-git-revision",
  "escape-bytes",
  "ethnum",
  "hex",
  "sha2 0.10.9",
- "stellar-strkey 1.0.0",
+ "stellar-strkey",
 ]
 
 [[package]]
@@ -15932,7 +15904,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c2ad44aa0ae96db89c4742212ed41645b2f597311ff6e1945542a4d9fadc2fb"
 dependencies = [
- "rustls 0.23.40",
+ "rustls 0.23.46",
  "sha2 0.11.0",
  "tokio",
  "tokio-postgres",
@@ -17138,7 +17110,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

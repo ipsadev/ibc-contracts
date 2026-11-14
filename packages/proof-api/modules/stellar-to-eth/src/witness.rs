@@ -158,11 +158,8 @@ pub fn attach(
         })
         .collect();
 
-    let [ibc_root] = roots.as_slice() else {
-        bail!(
-            "expected exactly one ibc_root event from the router, found {}",
-            roots.len()
-        );
+    let Some(ibc_root) = roots.last() else {
+        bail!("expected an ibc_root event from the router, found none");
     };
 
     let mut commitments = HashMap::new();

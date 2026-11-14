@@ -529,15 +529,16 @@ impl StellarToEthService {
             }
         };
 
-        let fixture = self.evidence.fixture(ledger).await?;
+        let fixture = self.evidence.fixture(ledger, None).await?;
         let trust_root: [u8; 32] = Sha256::digest(fixture.trust_root_xdr()).into();
         let network_id = sp1_stellar_prover::try_decode_hex32(&fixture.network_id)
             .map_err(|error| anyhow!("the network id of ledger {ledger}: {error}"))?;
 
-        let consensus_state =
-            tokio::task::spawn_blocking(move || consensus_state_of(&fixture.verify_natively(None)))
-                .await
-                .map_err(|error| anyhow!("verifying the genesis ledger panicked: {error}"))?;
+        let consensus_state = tokio::task::spawn_blocking(move || {
+            consensus_state_of(fixture.authenticate_natively(None).header())
+        })
+        .await
+        .map_err(|error| anyhow!("verifying the genesis ledger panicked: {error}"))?;
 
         let client_state = ClientState {
             networkId: network_id.into(),
@@ -627,9 +628,15 @@ impl StellarToEthService {
 
         self.evidence.wait_for(transaction.ledger).await?;
 
-        let fixture = self.evidence.fixture(transaction.ledger).await?;
+        let fingerprint = self.evm.client_state(client).await?.trustRootFingerprint.0;
+
+        let fixture = self
+            .evidence
+            .fixture(transaction.ledger, Some(fingerprint))
+            .await?;
         let (mut fixture, consensus_state) = tokio::task::spawn_blocking(move || {
-            let consensus_state = consensus_state_of(&fixture.verify_natively(None));
+            let consensus_state =
+                consensus_state_of(fixture.verify_natively(Some(fingerprint)).header());
 
             (fixture, consensus_state)
         })
@@ -795,11 +802,19 @@ impl StellarToEthService {
 
         let trusted_ledger =
             u32::try_from(trusted_height).context("the trusted height does not fit a u32")?;
-        let trusted_fixture = self.evidence.fixture(trusted_ledger).await?;
-        let mut fixture = self.evidence.fixture(transaction.ledger).await?;
+        let fingerprint = client_state.trustRootFingerprint.0;
+
+        let trusted_fixture = self
+            .evidence
+            .fixture(trusted_ledger, Some(fingerprint))
+            .await?;
+        let mut fixture = self
+            .evidence
+            .fixture(transaction.ledger, Some(fingerprint))
+            .await?;
 
         let trusted_consensus_state = tokio::task::spawn_blocking(move || {
-            consensus_state_of(&trusted_fixture.verify_natively(None))
+            consensus_state_of(trusted_fixture.verify_natively(Some(fingerprint)).header())
         })
         .await
         .map_err(|error| anyhow!("rebuilding the trusted consensus state failed: {error}"))?;

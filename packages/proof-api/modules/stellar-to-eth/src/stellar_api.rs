@@ -3,14 +3,37 @@
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
-use ipsa_scp_exporter::{
-    fixture::Fixture as Exported,
-    network::Network,
-    steps::{self, HeaderInput, QuorumConfig},
-};
+use scp_exporter::network::Network;
+use serde::Serialize;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use sp1_stellar_prover::Fixture;
+use stellar_consensus_verifier::primitives::execution::results::verify_result_set_hash;
+use stellar_consensus_verifier::verify::{verify_update, TrustRoot, UpdateEvidence};
 use stellar_xdr::{LedgerCloseMeta, Limits, ReadXdr, WriteXdr};
+
+/// The verified ledger evidence this module serialises as a prover fixture.
+#[derive(Debug, Serialize)]
+pub struct Exported {
+    pub network: String,
+    pub ledger_seq: u64,
+    pub network_id: String,
+    pub ledger_hash: String,
+    pub close_time: u64,
+    pub tx_set_result_hash: String,
+    pub bucket_list_hash: String,
+    pub ledger_header_xdr: String,
+    pub quorum_sets_xdr: Vec<String>,
+    pub envelopes_xdr: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub next_envelopes_xdr: Vec<String>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub next_tx_set_xdr: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub next_quorum_sets_xdr: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result_pairs_xdr: Option<Vec<String>>,
+}
 
 const POLL: Duration = Duration::from_secs(2);
 
@@ -112,8 +135,12 @@ impl StellarApi {
         }
     }
 
-    pub async fn fixture(&self, ledger: u32) -> Result<Fixture> {
-        let json = serde_json::to_string(&self.exported(ledger).await?)
+    pub async fn fixture(
+        &self,
+        ledger: u32,
+        expected_fingerprint: Option<[u8; 32]>,
+    ) -> Result<Fixture> {
+        let json = serde_json::to_string(&self.exported(ledger, expected_fingerprint).await?)
             .context("serialising the ledger evidence")?;
 
         Fixture::from_json(&json).context("reading the ledger evidence as a prover fixture")
@@ -131,19 +158,17 @@ impl StellarApi {
         hex_list(&archived, "result_pairs_xdr")
     }
 
-    pub async fn exported(&self, ledger: u32) -> Result<Exported> {
+    pub async fn exported(
+        &self,
+        ledger: u32,
+        expected_fingerprint: Option<[u8; 32]>,
+    ) -> Result<Exported> {
         let following = successor(ledger)?;
-        let preceding = ledger
-            .checked_sub(1)
-            .ok_or_else(|| anyhow!("ledger {ledger} has no predecessor"))?;
 
         let scp = self.require(&format!("/archive/scp/{ledger}")).await?;
         let next_scp = self.require(&format!("/archive/scp/{following}")).await?;
         let header = self
             .require(&format!("/archive/ledger-header/{ledger}"))
-            .await?;
-        let previous = self
-            .get(&format!("/archive/ledger-header/{preceding}"))
             .await?;
         let result_pairs_xdr = self.transaction_results(ledger).await?;
         let next_tx_set = hex_field(
@@ -153,94 +178,70 @@ impl StellarApi {
             "generalized_tx_set_xdr",
         )?;
 
-        let input = HeaderInput {
-            slot: ledger as u64,
-            network_id: self.network.id(),
-            ledger_header_xdr: hex_field(&header, "header_xdr")?,
-            envelopes_xdr: hex_list(&scp, "envelopes_xdr")?,
-            quorum_sets_xdr: hex_list(&scp, "quorum_sets_xdr")?,
-            recorded_ledger_hash: Some(hash32(&header, "hash")?),
-            result_pairs_xdr,
-            trusted_previous_hash: previous.map(|value| hash32(&value, "hash")).transpose()?,
-        };
-
-        let config = QuorumConfig::from_xdr(
-            input
-                .quorum_sets_xdr
-                .first()
-                .ok_or_else(|| anyhow!("ledger {ledger} carries no quorum set"))?,
-        )
-        .map_err(|error| anyhow!("the quorum set of ledger {ledger}: {error}"))?;
-
-        let verified = steps::verify_header(&input, &config)
-            .map_err(|error| anyhow!("verifying ledger {ledger}: {error}"))?;
-        steps::verify_result_set(&input.result_pairs_xdr, &verified.tx_set_result_hash)
-            .map_err(|error| anyhow!("the results of ledger {ledger}: {error}"))?;
-
+        let network_id = self.network.id();
+        let ledger_header_xdr = hex_field(&header, "header_xdr")?;
+        let envelopes_xdr = hex_list(&scp, "envelopes_xdr")?;
+        let quorum_sets_xdr = hex_list(&scp, "quorum_sets_xdr")?;
         let next_envelopes = hex_list(&next_scp, "envelopes_xdr")?;
         let next_quorum_sets = hex_list(&next_scp, "quorum_sets_xdr")?;
-        let next_value = externalized_value(
-            following,
-            self.network.id(),
-            &next_envelopes,
-            &next_quorum_sets,
+
+        let trust_root_xdr = quorum_sets_xdr
+            .first()
+            .ok_or_else(|| anyhow!("ledger {ledger} carries no quorum set"))?;
+
+        let fingerprint =
+            expected_fingerprint.unwrap_or_else(|| Sha256::digest(trust_root_xdr).into());
+
+        let trust_root = TrustRoot::from_pinned(trust_root_xdr, &fingerprint)
+            .map_err(|error| anyhow!("the quorum set of ledger {ledger}: {error}"))?;
+
+        let authenticated = verify_update(
+            &trust_root,
+            &UpdateEvidence {
+                network_id: &network_id,
+                slot: u64::from(ledger),
+                header_xdr: &ledger_header_xdr,
+                envelopes_xdr: &envelopes_xdr,
+                quorum_sets_xdr: &quorum_sets_xdr,
+                successor_envelopes_xdr: &next_envelopes,
+                successor_quorum_sets_xdr: &quorum_sets_xdr,
+                successor_tx_set_xdr: &next_tx_set,
+            },
         )
-        .map_err(|error| anyhow!("ledger {following}'s consensus: {error}"))?;
-        steps::verify_next_slot_binding(&next_value, &next_tx_set, &verified.ledger_hash)
-            .map_err(|error| anyhow!("binding ledger {ledger} to the next slot: {error}"))?;
+        .map_err(|error| anyhow!("verifying ledger {ledger}: {error}"))?;
+
+        let verified = authenticated.header();
+
+        let recorded = hash32(&header, "hash")?;
+
+        if verified.ledger_hash != recorded {
+            bail!(
+                "ledger {ledger} header hashes to {}, but the archive recorded {}",
+                hex::encode(verified.ledger_hash),
+                hex::encode(recorded)
+            );
+        }
+
+        verify_result_set_hash(&result_pairs_xdr, &verified.tx_set_result_hash)
+            .map_err(|error| anyhow!("the results of ledger {ledger}: {error}"))?;
 
         Ok(Exported {
             network: self.network.label().to_string(),
-            ledger_seq: input.slot,
-            network_id: hex::encode(input.network_id),
+            ledger_seq: u64::from(ledger),
+            network_id: hex::encode(network_id),
             ledger_hash: hex::encode(verified.ledger_hash),
             close_time: verified.close_time,
             tx_set_result_hash: hex::encode(verified.tx_set_result_hash),
             bucket_list_hash: hex::encode(verified.bucket_list_hash),
-            ledger_header_xdr: hex::encode(&input.ledger_header_xdr),
-            quorum_sets_xdr: input.quorum_sets_xdr.iter().map(hex::encode).collect(),
-            envelopes_xdr: input.envelopes_xdr.iter().map(hex::encode).collect(),
+            ledger_header_xdr: hex::encode(&ledger_header_xdr),
+            quorum_sets_xdr: quorum_sets_xdr.iter().map(hex::encode).collect(),
+            envelopes_xdr: envelopes_xdr.iter().map(hex::encode).collect(),
             next_envelopes_xdr: next_envelopes.iter().map(hex::encode).collect(),
             next_tx_set_xdr: hex::encode(&next_tx_set),
             next_quorum_sets_xdr: next_quorum_sets.iter().map(hex::encode).collect(),
-            result_pairs_xdr: Some(input.result_pairs_xdr.iter().map(hex::encode).collect()),
+            result_pairs_xdr: Some(result_pairs_xdr.iter().map(hex::encode).collect()),
         })
     }
-}
-
-fn externalized_value(
-    slot: u32,
-    network_id: [u8; 32],
-    envelopes_xdr: &[Vec<u8>],
-    quorum_sets_xdr: &[Vec<u8>],
-) -> Result<Vec<u8>> {
-    let envelopes = envelopes_xdr
-        .iter()
-        .map(|raw| steps::validate_externalize(raw, slot as u64))
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|error| anyhow!("{error}"))?;
-
-    steps::reject_duplicate_signers(&envelopes).map_err(|error| anyhow!("{error}"))?;
-
-    for envelope in &envelopes {
-        steps::verify_envelope_signature(envelope, &network_id)
-            .map_err(|error| anyhow!("{error}"))?;
-    }
-
-    let preimages =
-        steps::index_quorum_sets(quorum_sets_xdr).map_err(|error| anyhow!("{error}"))?;
-    let signers = steps::verify_quorum_set_hashes(&envelopes, &preimages)
-        .map_err(|error| anyhow!("{error}"))?;
-    let config = QuorumConfig::from_xdr(
-        quorum_sets_xdr
-            .first()
-            .ok_or_else(|| anyhow!("no quorum set"))?,
-    )
-    .map_err(|error| anyhow!("{error}"))?;
-
-    steps::verify_externalized_quorum(&config, &signers, &envelopes)
-        .map(|externalized| externalized.value)
-        .map_err(|error| anyhow!("{error}"))
 }
 
 pub fn result_pairs(metadata_xdr: &[u8]) -> Result<Vec<Vec<u8>>> {

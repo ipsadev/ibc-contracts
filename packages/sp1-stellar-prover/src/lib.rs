@@ -4,13 +4,16 @@ pub mod relay;
 
 use std::path::Path;
 
-use ipsa_scp_verifier::steps::verify_header;
-use ipsa_scp_verifier::steps::HeaderInput;
-use ipsa_scp_verifier::steps::QuorumConfig;
-use ipsa_scp_verifier::steps::VerifiedLedger;
 use serde::Deserialize;
 use sha2::Digest;
 use sha2::Sha256;
+use stellar_consensus_verifier::primitives::stellar::header::LedgerHeader;
+use stellar_consensus_verifier::verify::verify_header;
+use stellar_consensus_verifier::verify::verify_update;
+use stellar_consensus_verifier::verify::AuthenticatedHeader;
+use stellar_consensus_verifier::verify::TrustRoot;
+use stellar_consensus_verifier::verify::UpdateEvidence;
+use stellar_consensus_verifier::verify::ValueBoundHeader;
 use stellar_light_client_membership::KVPair;
 use stellar_light_client_membership::MembershipProofEntry;
 use stellar_light_client_solidity_types::StateRootProof;
@@ -92,41 +95,94 @@ impl Fixture {
         decode_hex(first)
     }
 
-    pub fn header_input(&self, trusted_previous_hash: Option<[u8; 32]>) -> HeaderInput {
-        HeaderInput {
-            slot: self.ledger_seq,
-            network_id: decode_hex32(&self.network_id),
-            ledger_header_xdr: decode_hex(&self.ledger_header_xdr),
-            envelopes_xdr: self
-                .envelopes_xdr
-                .iter()
-                .map(|one| decode_hex(one))
-                .collect(),
-            quorum_sets_xdr: self
-                .quorum_sets_xdr
-                .iter()
-                .map(|one| decode_hex(one))
-                .collect(),
-            result_pairs_xdr: Vec::new(),
-            recorded_ledger_hash: None,
-            trusted_previous_hash,
-        }
-    }
-
-    pub fn verify_natively(&self, trusted_previous_hash: Option<[u8; 32]>) -> VerifiedLedger {
+    pub fn verify_natively(&self, expected_fingerprint: Option<[u8; 32]>) -> ValueBoundHeader {
         let trust_root_xdr = self.trust_root_xdr();
 
-        let config = QuorumConfig::from_xdr(&trust_root_xdr).expect("the trust root is unusable");
+        let fingerprint =
+            expected_fingerprint.unwrap_or_else(|| Sha256::digest(&trust_root_xdr).into());
 
-        let input = self.header_input(trusted_previous_hash);
+        let trust_root = TrustRoot::from_pinned(&trust_root_xdr, &fingerprint)
+            .expect("the trust root is unusable");
 
-        verify_header(&input, &config).expect("native verification failed")
+        let envelopes_xdr: Vec<Vec<u8>> = self
+            .envelopes_xdr
+            .iter()
+            .map(|one| decode_hex(one))
+            .collect();
+
+        let quorum_sets_xdr: Vec<Vec<u8>> = self
+            .quorum_sets_xdr
+            .iter()
+            .map(|one| decode_hex(one))
+            .collect();
+
+        let ledger_header_xdr = decode_hex(&self.ledger_header_xdr);
+
+        verify_header(
+            &decode_hex32(&self.network_id),
+            &trust_root,
+            self.ledger_seq,
+            &envelopes_xdr,
+            &quorum_sets_xdr,
+            &ledger_header_xdr,
+        )
+        .expect("native verification failed")
     }
 
-    pub fn witness(&self, verified: &VerifiedLedger, time: u128) -> Witness {
+    pub fn authenticate_natively(
+        &self,
+        expected_fingerprint: Option<[u8; 32]>,
+    ) -> AuthenticatedHeader {
+        let trust_root_xdr = self.trust_root_xdr();
+
+        let fingerprint =
+            expected_fingerprint.unwrap_or_else(|| Sha256::digest(&trust_root_xdr).into());
+
+        let trust_root = TrustRoot::from_pinned(&trust_root_xdr, &fingerprint)
+            .expect("the trust root is unusable");
+
+        let envelopes_xdr: Vec<Vec<u8>> = self
+            .envelopes_xdr
+            .iter()
+            .map(|one| decode_hex(one))
+            .collect();
+
+        let quorum_sets_xdr: Vec<Vec<u8>> = self
+            .quorum_sets_xdr
+            .iter()
+            .map(|one| decode_hex(one))
+            .collect();
+
+        let next_envelopes_xdr: Vec<Vec<u8>> = self
+            .next_envelopes_xdr
+            .iter()
+            .map(|one| decode_hex(one))
+            .collect();
+
+        let ledger_header_xdr = decode_hex(&self.ledger_header_xdr);
+
+        let next_tx_set_xdr = decode_hex(&self.next_tx_set_xdr);
+
+        verify_update(
+            &trust_root,
+            &UpdateEvidence {
+                network_id: &decode_hex32(&self.network_id),
+                slot: self.ledger_seq,
+                header_xdr: &ledger_header_xdr,
+                envelopes_xdr: &envelopes_xdr,
+                quorum_sets_xdr: &quorum_sets_xdr,
+                successor_envelopes_xdr: &next_envelopes_xdr,
+                successor_quorum_sets_xdr: &quorum_sets_xdr,
+                successor_tx_set_xdr: &next_tx_set_xdr,
+            },
+        )
+        .expect("native authentication failed")
+    }
+
+    pub fn witness(&self, verified: &ValueBoundHeader, time: u128) -> Witness {
         let trusted = ConsensusState {
             closeTime: 0,
-            ledgerHash: verified.previous_ledger_hash.into(),
+            ledgerHash: verified.header().previous_ledger_hash.into(),
             previousLedgerHash: [0_u8; 32].into(),
             bucketListHash: [0_u8; 32].into(),
             transactionSetResultHash: [0_u8; 32].into(),
@@ -376,12 +432,12 @@ pub fn try_decode_hex32(hexed: &str) -> Result<[u8; 32], String> {
         .map_err(|_| format!("expected 32 bytes of hex, got {}", decoded.len()))
 }
 
-pub fn consensus_state_of(verified: &VerifiedLedger) -> ConsensusState {
+pub fn consensus_state_of(header: &LedgerHeader) -> ConsensusState {
     ConsensusState {
-        closeTime: verified.close_time,
-        ledgerHash: verified.ledger_hash.into(),
-        previousLedgerHash: verified.previous_ledger_hash.into(),
-        bucketListHash: verified.bucket_list_hash.into(),
-        transactionSetResultHash: verified.tx_set_result_hash.into(),
+        closeTime: header.close_time,
+        ledgerHash: header.ledger_hash.into(),
+        previousLedgerHash: header.previous_ledger_hash.into(),
+        bucketListHash: header.bucket_list_hash.into(),
+        transactionSetResultHash: header.tx_set_result_hash.into(),
     }
 }

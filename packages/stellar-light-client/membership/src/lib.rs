@@ -4,8 +4,8 @@
 pub mod scenario;
 pub mod smt;
 
-use ipsa_scp_verifier::scp::results::verify_state_root;
-use ipsa_scp_verifier::scp::results::Inputs;
+use stellar_consensus_verifier::primitives::execution::results::verify_state_root;
+use stellar_consensus_verifier::primitives::execution::results::Inputs;
 use stellar_light_client_solidity_types::ClientState;
 use stellar_light_client_solidity_types::StateRootProof;
 use thiserror::Error;

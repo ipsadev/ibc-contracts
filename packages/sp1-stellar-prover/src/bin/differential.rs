@@ -36,8 +36,8 @@ fn main() {
     println!("envelopes {}", fixture.envelopes_xdr.len());
     println!();
 
-    let unbound = fixture.verify_natively(None);
-    let native = fixture.verify_natively(Some(unbound.previous_ledger_hash));
+    let native = fixture.verify_natively(None);
+    let header = native.header();
     let witness = fixture.witness(&native, VERIFICATION_TIME);
 
     let elf_bytes = std::fs::read(&elf_path).unwrap_or_else(|error| {
@@ -81,43 +81,43 @@ fn main() {
         &mut failures,
         "close time",
         output.newConsensusState.closeTime,
-        native.close_time,
+        header.close_time,
     );
     compare(
         &mut failures,
         "ledger hash",
         output.newConsensusState.ledgerHash.0,
-        native.ledger_hash,
+        header.ledger_hash,
     );
     compare(
         &mut failures,
         "previous ledger hash",
         output.newConsensusState.previousLedgerHash.0,
-        native.previous_ledger_hash,
+        header.previous_ledger_hash,
     );
     compare(
         &mut failures,
         "bucket list hash",
         output.newConsensusState.bucketListHash.0,
-        native.bucket_list_hash,
+        header.bucket_list_hash,
     );
     compare(
         &mut failures,
         "transaction set result hash",
         output.newConsensusState.transactionSetResultHash.0,
-        native.tx_set_result_hash,
+        header.tx_set_result_hash,
     );
     compare(
         &mut failures,
         "new height",
         output.newHeight.revisionHeight,
-        native.slot,
+        u64::from(header.ledger_seq),
     );
     compare(
         &mut failures,
         "trusted height",
         output.trustedHeight.revisionHeight,
-        native.slot - 1,
+        u64::from(header.ledger_seq) - 1,
     );
     compare(
         &mut failures,

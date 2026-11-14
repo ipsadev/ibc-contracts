@@ -10,6 +10,7 @@ use stellar_light_client_update_client::ClientState;
 use stellar_light_client_update_client::ConsensusState;
 use stellar_light_client_update_client::Header;
 use stellar_light_client_update_client::Height;
+use stellar_light_client_update_client::ScpError;
 use stellar_light_client_update_client::SupportedZkAlgorithm;
 use stellar_light_client_update_client::UpdateClientError;
 
@@ -264,10 +265,7 @@ fn an_adjacent_header_that_does_not_chain_back_is_rejected() {
         panic!("a broken chain must not verify");
     };
 
-    assert!(matches!(
-        error,
-        UpdateClientError::HeaderVerificationFailed(_)
-    ));
+    assert!(matches!(error, UpdateClientError::NotChildOfTrusted { .. }));
 }
 
 #[test]
@@ -287,23 +285,16 @@ fn the_network_id_comes_from_the_client_state_not_the_header() {
 }
 
 #[test]
-fn a_missing_quorum_set_preimage_is_rejected() {
+fn a_header_with_no_quorum_set_preimages_still_verifies() {
     let mut case = load("mainnet-63907880.json");
 
     case.proposed_header.quorumSetsXdr = Vec::new();
 
-    let Err(error) = run(&case) else {
-        panic!("a header with no quorum set preimages must not verify");
-    };
-
-    assert!(matches!(
-        error,
-        UpdateClientError::QuorumSetAuthenticationFailed(_)
-    ));
+    run(&case).expect("the pinned trust root already authenticates the externalized value");
 }
 
 #[test]
-fn a_tampered_quorum_set_preimage_is_rejected() {
+fn a_tampered_quorum_set_preimage_still_verifies() {
     let mut case = load("mainnet-63907880.json");
 
     let mut tampered = case.proposed_header.quorumSetsXdr[0].to_vec();
@@ -311,11 +302,7 @@ fn a_tampered_quorum_set_preimage_is_rejected() {
     *tampered.last_mut().unwrap() ^= 0x01;
     case.proposed_header.quorumSetsXdr[0] = tampered.into();
 
-    let Err(error) = run(&case) else {
-        panic!("a tampered quorum set preimage must not verify");
-    };
-
-    assert!(matches!(error, UpdateClientError::MalformedQuorumSet(_)));
+    run(&case).expect("the pinned trust root already authenticates the externalized value");
 }
 
 #[test]
@@ -330,7 +317,7 @@ fn the_signers_must_form_a_quorum_under_the_pinned_trust_root() {
 
     assert!(matches!(
         error,
-        UpdateClientError::QuorumCheckFailed(_) | UpdateClientError::HeaderVerificationFailed(_)
+        UpdateClientError::HeaderVerificationFailed(ScpError::NoConfirmedCommit)
     ));
 }
 
@@ -347,7 +334,10 @@ fn a_forged_bucket_list_hash_is_rejected() {
         panic!("a forged bucketListHash must not verify: it is what commits to all ledger state");
     };
 
-    assert!(matches!(error, UpdateClientError::NextSlotBindingFailed(_)));
+    assert!(matches!(
+        error,
+        UpdateClientError::HeaderVerificationFailed(ScpError::ChainBroken { .. })
+    ));
 }
 
 #[test]
@@ -363,7 +353,10 @@ fn a_forged_transaction_set_result_hash_is_rejected() {
         panic!("a forged txSetResultHash must not verify: membership proofs anchor on it");
     };
 
-    assert!(matches!(error, UpdateClientError::NextSlotBindingFailed(_)));
+    assert!(matches!(
+        error,
+        UpdateClientError::HeaderVerificationFailed(ScpError::ChainBroken { .. })
+    ));
 }
 
 #[test]
@@ -395,8 +388,7 @@ fn next_slot_envelopes_from_another_ledger_are_rejected() {
 
     assert!(matches!(
         error,
-        UpdateClientError::NextSlotAuthenticationFailed { .. }
-            | UpdateClientError::MalformedNextEnvelope { .. }
+        UpdateClientError::HeaderVerificationFailed(ScpError::EnvelopeSlotMismatch { .. })
     ));
 }
 
@@ -413,7 +405,10 @@ fn a_tampered_next_slot_transaction_set_is_rejected() {
         panic!("the next slot's tx set must hash to the txSetHash its SCP value names");
     };
 
-    assert!(matches!(error, UpdateClientError::NextSlotBindingFailed(_)));
+    assert!(matches!(
+        error,
+        UpdateClientError::HeaderVerificationFailed(ScpError::SuccessorTxSetMismatch)
+    ));
 }
 
 #[test]

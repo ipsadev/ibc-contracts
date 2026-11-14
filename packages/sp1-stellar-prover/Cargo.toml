@@ -10,12 +10,12 @@ license     = { workspace = true }
 stellar-light-client-update-client = { workspace = true }
 stellar-light-client-membership    = { workspace = true, features = ["scenario"] }
 stellar-light-client-solidity-types = { workspace = true }
-ipsa-scp-verifier                  = { workspace = true }
+stellar-consensus-verifier         = { workspace = true }
 
 sp1-sdk = { workspace = true, features = ["blocking", "network"] }
 
 alloy-sol-types = { workspace = true }
-hex             = { workspace = true }
+hex             = { workspace = true, features = ["alloc"] }
 anyhow          = { workspace = true, features = ["std"] }
 sha2            = { workspace = true }
 serde           = { workspace = true, features = ["derive"] }
