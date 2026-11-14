@@ -487,7 +487,7 @@ fn attach_packet_proofs(
             .nodes;
         let proof: Bytes = IBesuLightClientMsgs::MembershipProof {
             consensusStatePreimage: proven_state.clone(),
-            accountProofNodes: account_proof.take().map_or_default(<[Bytes]>::to_vec),
+            accountProofNodes: account_proof.take().map(<[Bytes]>::to_vec).unwrap_or_default(),
             proofNodes: proof_nodes.clone(),
         }
         .abi_encode()

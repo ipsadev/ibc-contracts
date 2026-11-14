@@ -126,7 +126,7 @@ impl Beacon {
             genesis_time: self.genesis_time,
             genesis_slot: self.spec.genesis_slot,
             fork_parameters: self.spec.to_fork_parameters(),
-            seconds_per_slot: self.spec.seconds_per_slot,
+            seconds_per_slot: self.spec.slot_duration_ms / 1000,
             slots_per_epoch: self.spec.slots_per_epoch,
             epochs_per_sync_committee_period: self.spec.epochs_per_sync_committee_period,
             latest_slot,
@@ -298,7 +298,7 @@ impl Beacon {
     }
 
     fn timestamp_of(&self, update: &LightClientUpdate) -> u64 {
-        self.genesis_time + update.signature_slot * self.spec.seconds_per_slot
+        self.genesis_time + update.signature_slot * (self.spec.slot_duration_ms / 1000)
     }
 
     pub async fn steps(
