@@ -18,6 +18,17 @@ interface IIBCERC20 is IMintableAndBurnable {
     /// @return The ICS20 contract address
     function ics20() external view returns (address);
 
+    /// @notice Sets the name, symbol and decimals wallets show for the token
+    /// @dev Only an account holding ERC20_CUSTOMIZER_ROLE in the ICS20 contract's access manager with no execution
+    /// delay can call it; a role granted with a delay is refused rather than scheduled. A token carrying the amounts of
+    /// a chain with fewer decimals, such as Stellar's 7, needs its decimals set to match. The first call sets the
+    /// decimals, since a voucher can already hold balances before its metadata is set, and every later call must pass
+    /// the same decimals or it reverts with IBCERC20DecimalsAlreadySet. The name and symbol can be changed by any call.
+    /// @param customDecimals The decimals to report
+    /// @param customName The name to report
+    /// @param customSymbol The symbol to report
+    function setMetadata(uint8 customDecimals, string calldata customName, string calldata customSymbol) external;
+
     /// @notice Initializes the IBCERC20 contract
     /// @dev This function is meant to be called by a proxy
     /// @param ics20_ The ICS20 contract address

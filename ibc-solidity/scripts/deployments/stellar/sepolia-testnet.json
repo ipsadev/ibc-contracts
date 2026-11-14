@@ -1,0 +1,19 @@
+{
+  "network": "testnet",
+  "verifier": "0x397A5f7f3dBd538f23DE225B51f532c34448dA9B",
+  "roleManager": "0x3f09B9D0E8453C91FBA256F8e2A39A7200D7604B",
+  "updateClientVkey": "0x00ce3e12fb8334da3a7a072110c9a482a4526c1603adb1cc0b2c2fafdd5dec19",
+  "membershipVkey": "0x00fcd9a5101f61012dfc37cd9128ff7a6ac30470132833c0fef2236955147d3f",
+  "ucAndMembershipVkey": "0x0090386d5445bf5c10b06f00db67ec021027c62d5f858b4deefa964e0f33f94a",
+  "networkId": "0xcee0302d59844d32bdca915c8203dd44b33fbb7edc19051ea37abedf28ecd472",
+  "trustRootFingerprint": "0x59d361aef699a1ca165dfcea7ebdedf8f9889c35cf76b35cfcb173cd72a2d669",
+  "routerContractId": "0x9427a7eb991421dbd04c37d61bc4f452e75308ecfc39f3dfdf584ffb34dfdce9",
+  "rootEventTopic": "0x6962635f726f6f74",
+  "revisionNumber": 0,
+  "revisionHeight": 4854459,
+  "closeTime": 1790295882,
+  "ledgerHash": "0x43e3280aea74d5c35b4630c14746b6ede9d7f8a2f5a2e884531c0a5d78b4262f",
+  "previousLedgerHash": "0x52a1daca90c314b0a34a61bf5341f2502c9db67c08d28d9dc74a3e83fd6ba058",
+  "bucketListHash": "0x862795b1be3a2698525e63df2a00b2b8c21a5c659922bc25cd9aea52b62b15f8",
+  "transactionSetResultHash": "0x38214d82bd76891c6e92943b58c9e47e30d5c3d3110cb82a009e717143288c99"
+}

@@ -42,14 +42,14 @@ permissions: {}
 jobs:
   golangci:
     name: lint
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: 1.26.5
+          go-version: 1.26.10
           cache-dependency-path: e2e/interchaintestv8/go.sum
 
       - name: golangci-lint
@@ -59,7 +59,7 @@ jobs:
           working-directory: e2e/interchaintestv8
 
   generate-matrix:
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -73,7 +73,11 @@ jobs:
           skip-tests: TestWithProofAPITestSuite/Test_2_ConcurrentRecvPacketToEth,TestWithProofAPITestSuite/Test_MultiPeriodClientUpdateToCosmos,TestWithProofAPITestSuite/Test_5_FinalizedTimeoutPacketFromEth,TestWithProofAPITestSuite/Test_UpdateClientToCosmos,TestWithEthToEthAttestedTestSuite,TestWithMultiAttestorTestSuite
 
   build-e2e-programs:
-    runs-on: depot-ubuntu-24.04-4
+    # The Rust (SP1, proof-api, operator) and Solana builds take ~20-30 min each; run them in parallel.
+    strategy:
+      matrix:
+        component: [rust, solana]
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -82,6 +86,7 @@ jobs:
         uses: ./.github/actions/e2e-build
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          component: ${{ matrix.component }}
 
   e2e:
     needs: [generate-matrix, build-e2e-programs]
@@ -95,7 +100,7 @@ jobs:
         COSMOS_LC_ON_ETH: sp1
         IBC_ATTESTOR_IMAGE: ghcr.io/cosmos/ibc-attestor:v0.3.0
 
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: read
@@ -105,6 +110,7 @@ jobs:
         uses: ./.github/actions/e2e-setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          wfchain_pat: ${{ secrets.WFCHAIN_PAT }}
 
       - name: Run Tests
         env:

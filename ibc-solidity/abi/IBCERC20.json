@@ -197,6 +197,29 @@
   },
   {
     "type": "function",
+    "name": "setMetadata",
+    "inputs": [
+      {
+        "name": "customDecimals",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "customName",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "customSymbol",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "symbol",
     "inputs": [],
     "outputs": [
@@ -420,6 +443,22 @@
         "name": "spender",
         "type": "address",
         "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "IBCERC20DecimalsAlreadySet",
+    "inputs": [
+      {
+        "name": "decimals",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "requestedDecimals",
+        "type": "uint8",
+        "internalType": "uint8"
       }
     ]
   },

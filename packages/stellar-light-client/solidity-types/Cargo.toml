@@ -1,0 +1,10 @@
+[package]
+name        = "stellar-light-client-solidity-types"
+description = "Rust bindings for the Stellar light client's Solidity message types"
+version     = { workspace = true }
+edition     = { workspace = true }
+repository  = { workspace = true }
+license     = { workspace = true }
+
+[dependencies]
+alloy-sol-types = { workspace = true }
