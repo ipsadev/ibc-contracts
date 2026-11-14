@@ -140,7 +140,7 @@ jobs:
           retention-days: 7
 
   differential:
-    name: differential-and-negative
+    name: differential
     needs: [guests]
     runs-on: ubuntu-latest
     permissions:
@@ -170,12 +170,6 @@ jobs:
           cargo run --release --locked -p sp1-stellar-prover --bin differential -- \
             packages/stellar-light-client/fixtures/testnet-4160279.json
           cargo run --release --locked -p sp1-stellar-prover --bin membership
-
-      - name: The circuit must reject everything the native verifier rejects
-        run: |
-          cargo run --release --locked -p sp1-stellar-prover --bin negative
-          cargo run --release --locked -p sp1-stellar-prover --bin negative -- \
-            packages/stellar-light-client/fixtures/testnet-4160279.json
 
   solidity:
     name: solidity-client

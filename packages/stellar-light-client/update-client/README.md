@@ -38,8 +38,10 @@ produces a valid proof of a ledger Stellar never agreed.
 
 `stellar-consensus-verifier` makes that mistake unrepresentable: a `TrustRoot` can
 only be built with `TrustRoot::from_pinned`, which refuses any quorum set whose
-hash is not the fingerprint committed out of band, and checks the set is
-BFT-sound. So `update_client` never reads a trust root that is not pinned:
+hash is not the fingerprint committed out of band, and checks that every inner set
+has a strict majority threshold. That is a sanity floor, not BFT soundness: a 1-of-1
+or 2-of-3 set passes, so the pinned root itself must be reviewed before a client is
+created. So `update_client` never reads a trust root that is not pinned:
 
 1. The client state holds `trustRootFingerprint`, and the contract holds the
    client state across updates.
