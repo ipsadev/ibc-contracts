@@ -30,7 +30,8 @@ Given one Stellar transaction hash:
 6. Builds the membership witness: the ledger's result pair, the success preimage
    rebuilt from the transaction meta, the value the transaction wrote at the
    packet's path, and the path's 64 sparse Merkle siblings, folded to the
-   published `ibc_root`. The committed value must equal what the EVM router
+   last `ibc_root` the transaction published, the same root the core verifier
+   takes. The committed value must equal what the EVM router
    will recompute from the packet.
 
    The siblings come from `ipsa-gateway` (`QueryTreeSiblings`). The router keeps
