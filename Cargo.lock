@@ -9063,7 +9063,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "hex",
- "rustls 0.23.40",
+ "rustls 0.23.46",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -9072,7 +9072,7 @@ dependencies = [
  "tokio-postgres",
  "tokio-postgres-rustls",
  "tracing",
- "webpki-roots 1.0.7",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
@@ -9178,7 +9178,7 @@ dependencies = [
  "ibc-eureka-solidity-types 0.1.0",
  "proof-api-core",
  "proof-api-history",
- "prost",
+ "prost 0.13.5",
  "reqwest 0.12.28",
  "scp-exporter",
  "serde",
@@ -9249,7 +9249,7 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -15078,9 +15078,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stellar-consensus-verifier"
-version = "2.2.0"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "483f9dda4571e3d585a790f5b4d49d558bd620eb943eb15431cda3f2852a81f7"
+checksum = "826e6d63237460185c48f23bdca5162f45cb6fe869a77fd7363897e77ad4ac25"
 dependencies = [
  "ed25519-dalek 2.2.0",
  "sha2 0.10.9",
@@ -15904,7 +15904,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c2ad44aa0ae96db89c4742212ed41645b2f597311ff6e1945542a4d9fadc2fb"
 dependencies = [
- "rustls 0.23.40",
+ "rustls 0.23.46",
  "sha2 0.11.0",
  "tokio",
  "tokio-postgres",
@@ -17110,7 +17110,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

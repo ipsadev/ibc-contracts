@@ -90,7 +90,7 @@ Succinct requester account whose deposited PROVE pays for the proofs.
 
 ## The consensus-verifier dependency
 
-The module checks evidence with `stellar-consensus-verifier` 2.2.0 from crates.io, and fetches the network parameters with `scp-exporter` 0.1.0; the Stellar guests use the same verifier through the workspace entry. 2.2.0 reads Protocol 30's millisecond close times (CAP-88); earlier majors refused every header since testnet's upgrade at ledger 5540313. The guests still carry verifying keys built against the previous verifier: until they are recompiled on core, `ibc-solidity/programs/sp1-stellar-programs/vkeys.json` is stale, so the deployed `SP1ICSStellar`, whose keys are immutable, must be replaced by one built with the keys from the core guests.
+The module checks evidence with `stellar-consensus-verifier` 2.3.0 from crates.io, and fetches the network parameters with `scp-exporter` 0.1.0; the Stellar guests use the same verifier through the workspace entry. 2.x reads Protocol 30's millisecond close times (CAP-88); earlier majors refused every header since testnet's upgrade at ledger 5540313. The guests still carry verifying keys built against the previous verifier: until they are recompiled on core, `ibc-solidity/programs/sp1-stellar-programs/vkeys.json` is stale, so the deployed `SP1ICSStellar`, whose keys are immutable, must be replaced by one built with the keys from the core guests.
 
 ## XDR version
 
