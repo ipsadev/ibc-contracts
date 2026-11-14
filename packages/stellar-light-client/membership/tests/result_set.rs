@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use ipsa_scp_verifier::steps::verify_result_set;
+use stellar_consensus_verifier::primitives::execution::results::verify_result_set_hash;
 
 const FIXTURE: &str = "../fixtures/mainnet-63907881.json";
 
@@ -48,7 +48,7 @@ fn a_real_ledgers_results_hash_to_the_hash_its_header_committed() {
         "mainnet 63907881 closed 402 transactions"
     );
 
-    verify_result_set(&ledger.result_pairs, &ledger.tx_set_result_hash)
+    verify_result_set_hash(&ledger.result_pairs, &ledger.tx_set_result_hash)
         .expect("the archived results must hash to the header's txSetResultHash");
 }
 
@@ -61,7 +61,7 @@ fn a_tampered_result_pair_is_rejected_on_a_real_ledger() {
     *pairs[0].last_mut().unwrap() ^= 0x01;
 
     assert!(
-        verify_result_set(&pairs, &ledger.tx_set_result_hash).is_err(),
+        verify_result_set_hash(&pairs, &ledger.tx_set_result_hash).is_err(),
         "one flipped byte in one of 402 results must break the set hash"
     );
 }
@@ -75,7 +75,7 @@ fn a_dropped_result_pair_is_rejected_on_a_real_ledger() {
     pairs.pop();
 
     assert!(
-        verify_result_set(&pairs, &ledger.tx_set_result_hash).is_err(),
+        verify_result_set_hash(&pairs, &ledger.tx_set_result_hash).is_err(),
         "the count is hashed first, so dropping a result cannot go unnoticed"
     );
 }
@@ -91,7 +91,7 @@ fn reordered_results_are_rejected_on_a_real_ledger() {
     pairs.swap(0, 1);
 
     assert!(
-        verify_result_set(&pairs, &ledger.tx_set_result_hash).is_err(),
+        verify_result_set_hash(&pairs, &ledger.tx_set_result_hash).is_err(),
         "result order is part of what txSetResultHash commits to"
     );
 }
@@ -107,7 +107,7 @@ fn results_do_not_verify_against_another_ledgers_hash() {
     other[0] ^= 0x01;
 
     assert!(
-        verify_result_set(&ledger.result_pairs, &other).is_err(),
+        verify_result_set_hash(&ledger.result_pairs, &other).is_err(),
         "results must bind to the ledger whose header committed them"
     );
 }

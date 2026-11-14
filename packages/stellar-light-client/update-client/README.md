@@ -1,8 +1,8 @@
 # stellar-light-client-update-client
 
-Turns the ABI-encoded inputs an EVM contract holds into the `HeaderInput` that
-`ipsa-scp-verifier` verifies, and turns the result back into an ABI-encoded
-output a Solidity contract can decode.
+Turns the ABI-encoded inputs an EVM contract holds into the `UpdateEvidence` that
+`stellar-consensus-verifier` verifies, and turns the result back into an
+ABI-encoded output a Solidity contract can decode.
 
 This crate is the whole of the Stellar light client's verification logic. The SP1
 guest at `ibc-solidity/programs/sp1-programs/stellar-update-client` is a thin
@@ -31,20 +31,23 @@ producing a second, incompatible copy of the imported type.
 
 ## The one thing this must not get wrong
 
-`ipsa-scp-verifier` natively defaults to deriving the trust root from the data
-being verified — the quorum set the signers themselves pledge. Natively that is a
-weak default. **In a circuit it is fatal:** a prover supplies their own
-three-validator quorum set, satisfies every step honestly, and produces a valid
-proof of a ledger Stellar never agreed.
+Deriving the trust root from the data being verified — the quorum set the signers
+themselves pledge — is the classic mistake. **In a circuit it is fatal:** a prover
+supplies their own three-validator quorum set, satisfies every step honestly, and
+produces a valid proof of a ledger Stellar never agreed.
 
-So `update_client` never reads a trust root that is not pinned:
+`stellar-consensus-verifier` makes that mistake unrepresentable: a `TrustRoot` can
+only be built with `TrustRoot::from_pinned`, which refuses any quorum set whose
+hash is not the fingerprint committed out of band, and checks the set is
+BFT-sound. So `update_client` never reads a trust root that is not pinned:
 
 1. The client state holds `trustRootFingerprint`, and the contract holds the
    client state across updates.
 2. The prover supplies `trustRootXdr` in the header.
 3. `update_client` computes `sha256(trustRootXdr)` and **rejects the update
    unless it equals the pinned fingerprint.**
-4. Only then is a `QuorumConfig` built from those bytes.
+4. Only then is a `TrustRoot` built from those bytes, which `verify_update`
+   requires.
 
 The prover still supplies the bytes; it cannot choose which quorum set they are.
 
@@ -55,11 +58,9 @@ from the contract rather than the header.
 
 ## Two other choices that are security-relevant
 
-**The ledger hash is derived, never asserted.** `HeaderInput.recorded_ledger_hash`
-is passed as `None`. The verifier will compare the header XDR's hash against a
-supplied value when given one, but a value supplied by the prover proves nothing.
-Passing `None` means the hash in the output is `sha256(ledgerHeaderXdr)`,
-computed inside the circuit.
+**The ledger hash is derived, never asserted.** `verify_update` never takes a
+ledger hash from the prover; a value supplied by the prover proves nothing. The
+hash in the output is `sha256(ledgerHeaderXdr)`, computed inside the circuit.
 
 **Chain continuity is bound only when it is real.** If the proposed slot is
 exactly one above the client's latest height, `trusted_previous_hash` is set to

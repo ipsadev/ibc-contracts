@@ -20,8 +20,7 @@ fn main() {
 
     let fixture = Fixture::load(&root.join(FIXTURE_PATH));
 
-    let unbound = fixture.verify_natively(None);
-    let native = fixture.verify_natively(Some(unbound.previous_ledger_hash));
+    let native = fixture.verify_natively(None);
     let witness = fixture.witness(&native, VERIFICATION_TIME);
 
     let update = update_client(
