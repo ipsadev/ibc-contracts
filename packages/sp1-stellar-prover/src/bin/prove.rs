@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use alloy_sol_types::SolValue;
-use ipsa_scp_verifier::steps::VerifiedLedger;
 use sp1_sdk::blocking::Elf;
 use sp1_sdk::blocking::ProveRequest;
 use sp1_sdk::blocking::Prover;
@@ -16,6 +15,7 @@ use sp1_sdk::SP1ProofMode;
 use sp1_sdk::SP1ProofWithPublicValues;
 use sp1_sdk::SP1VerifyingKey;
 use sp1_stellar_prover::Fixture;
+use stellar_consensus_verifier::verify::ValueBoundHeader;
 use stellar_light_client_update_client::ConsensusState;
 use stellar_light_client_update_client::UpdateClientOutput;
 
@@ -53,8 +53,7 @@ fn main() {
 
     let fixture = Fixture::load(&fixture_path);
 
-    let unbound = fixture.verify_natively(None);
-    let native = fixture.verify_natively(Some(unbound.previous_ledger_hash));
+    let native = fixture.verify_natively(None);
     let witness = match std::env::var("STELLAR_TRUSTED_CONSENSUS") {
         Ok(path) => {
             let (trusted, trusted_height) = trusted_consensus_state(&PathBuf::from(&path));
@@ -106,7 +105,7 @@ fn prove_and_report<P>(
     stdin: SP1Stdin,
     mode: SP1ProofMode,
     fixture: &Fixture,
-    native: &VerifiedLedger,
+    native: &ValueBoundHeader,
 ) where
     P: Prover,
 {
@@ -145,12 +144,18 @@ fn prove_and_report<P>(
     let output = UpdateClientOutput::abi_decode(proof.public_values.as_slice())
         .expect("the committed public values are not an UpdateClientOutput");
 
-    assert_eq!(output.newConsensusState.ledgerHash.0, native.ledger_hash);
+    assert_eq!(
+        output.newConsensusState.ledgerHash.0,
+        native.header().ledger_hash
+    );
     assert_eq!(
         output.newConsensusState.bucketListHash.0,
-        native.bucket_list_hash
+        native.header().bucket_list_hash
     );
-    assert_eq!(output.newHeight.revisionHeight, native.slot);
+    assert_eq!(
+        output.newHeight.revisionHeight,
+        u64::from(native.header().ledger_seq)
+    );
 
     println!();
     println!("slot            {}", output.newHeight.revisionHeight);

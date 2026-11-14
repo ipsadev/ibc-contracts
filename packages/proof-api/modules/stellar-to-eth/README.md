@@ -23,7 +23,7 @@ Given one Stellar transaction hash:
    successor**: the next-slot binding needs ledger + 1.
 4. Assembles and verifies both the packet's ledger and the client's latest ledger
    from the api (all eight steps plus the result-set check), with
-   `ipsa-scp-verifier`.
+   `stellar-consensus-verifier`.
 5. Rebuilds the client's trusted consensus state from the verified ledger. The
    client stores only `keccak256(abi.encode(consensusState))`, so the rebuilt
    state is refused unless it hashes to the stored value.
@@ -70,7 +70,7 @@ Given one Stellar transaction hash:
 **`gateway_grpc_address`** is required to relay packets: without it every
 request fails before proving, with a message that says why.
 
-**`stellar_api_url`** is required: the ipsa api (for example `https://api.ipsa.dev`) that serves Stellar's consensus evidence. An api backed by a stellar-core watcher serves a ledger's SCP messages as it closes, where the history archive publishes them only with its checkpoint of 64 ledgers. The module reads the SCP messages from `/archive/scp/{ledger}`, the header from `/archive/ledger-header/{ledger}`, the next ledger's transaction set from `/archive/tx-set/{ledger}`, and the transaction results from the close metadata of `/ledger/{ledger}`, or from `/archive/results/{ledger}` once Soroban RPC no longer keeps the ledger. Before proving it checks the header against its SCP messages, the results against the header, and the next slot against the ledger's hash, so the api adds no trust. `checkpoint_timeout_seconds` (default 1200) bounds the wait in step 3. The module used to read the history archive directly when no api was set; that path was removed with the move to Protocol 30, because `ipsa-scp-verifier` 3 no longer exports evidence from the archive. `tests/stellar_api.rs` checks, when `STELLAR_LIVE_API_URL` is set, that the api's evidence verifies for a ledger the archive has published, one it has not, and one Soroban RPC no longer keeps.
+**`stellar_api_url`** is required: the ipsa api (for example `https://api.ipsa.dev`) that serves Stellar's consensus evidence. An api backed by a stellar-core watcher serves a ledger's SCP messages as it closes, where the history archive publishes them only with its checkpoint of 64 ledgers. The module reads the SCP messages from `/archive/scp/{ledger}`, the header from `/archive/ledger-header/{ledger}`, the next ledger's transaction set from `/archive/tx-set/{ledger}`, and the transaction results from the close metadata of `/ledger/{ledger}`, or from `/archive/results/{ledger}` once Soroban RPC no longer keeps the ledger. Before proving it checks the header against its SCP messages, the results against the header, and the next slot against the ledger's hash, pinning the quorum set to the trust-root fingerprint the on-chain client is configured with, so a dishonest api cannot pass off its own validators (except when creating a client, where there is no on-chain fingerprint yet and the genesis trust root is taken from the evidence and logged for out-of-band review). `checkpoint_timeout_seconds` (default 1200) bounds the wait in step 3. The module used to read the history archive directly when no api was set; that path was removed with the move to Protocol 30, and evidence now comes through the api, with the `scp-exporter` crate supplying the network parameters. `tests/stellar_api.rs` checks, when `STELLAR_LIVE_API_URL` is set, that the api's evidence verifies for a ledger the archive has published, one it has not, and one Soroban RPC no longer keeps.
 
 **`prover`** is `network` (default) or `execute`. `execute` is a free dry run:
 it does every step up to proving, executes both guests on the CPU, logs the cycle
@@ -88,9 +88,9 @@ Succinct requester account whose deposited PROVE pays for the proofs.
 - Timeouts (`timeout_tx_ids`), `CreateClient`, `UpdateClient`
 - The combined uc-and-membership program, which would halve the proofs
 
-## The `ipsa-scp-verifier` dependency
+## The consensus-verifier dependency
 
-The module checks evidence with `ipsa-scp-verifier` 3.1.0 from crates.io (as `ipsa-scp-exporter`), and the Stellar guests use the same version through the workspace entry. 3.1.0 sits on `stellar-consensus-verifier` 1.1.0, which reads Protocol 30's millisecond close times (CAP-88); 1.0 refused every header since testnet's upgrade at ledger 5540313. Moving the guests onto it recompiled them and moved all three Stellar verifying keys (`ibc-solidity/programs/sp1-stellar-programs/vkeys.json`), so the deployed `SP1ICSStellar`, whose keys are immutable, has to be replaced by one built with the new keys.
+The module checks evidence with `stellar-consensus-verifier` 2.2.0 from crates.io, and fetches the network parameters with `scp-exporter` 0.1.0; the Stellar guests use the same verifier through the workspace entry. 2.2.0 reads Protocol 30's millisecond close times (CAP-88); earlier majors refused every header since testnet's upgrade at ledger 5540313. The guests still carry verifying keys built against the previous verifier: until they are recompiled on core, `ibc-solidity/programs/sp1-stellar-programs/vkeys.json` is stale, so the deployed `SP1ICSStellar`, whose keys are immutable, must be replaced by one built with the keys from the core guests.
 
 ## XDR version
 

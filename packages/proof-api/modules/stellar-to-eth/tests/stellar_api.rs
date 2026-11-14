@@ -2,8 +2,8 @@
 
 use std::time::Duration;
 
-use ipsa_scp_exporter::network::Network;
 use proof_api_stellar_to_eth::stellar_api::StellarApi;
+use scp_exporter::network::Network;
 use sha2::{Digest, Sha256};
 
 const LIVE_API_URL_VARIABLE: &str = "STELLAR_LIVE_API_URL";
@@ -32,7 +32,7 @@ async fn archived_ledger() -> u32 {
 
 async fn assert_evidence_verifies(api: &StellarApi, ledger: u32) {
     let evidence = api
-        .exported(ledger)
+        .exported(ledger, None)
         .await
         .expect("the api's evidence verifies");
     let header = hex::decode(&evidence.ledger_header_xdr).expect("header hex");

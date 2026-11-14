@@ -7,11 +7,11 @@ repository  = { workspace = true }
 license     = { workspace = true }
 
 [dependencies]
-ipsa-scp-verifier                   = { workspace = true }
+stellar-consensus-verifier          = { workspace = true }
 stellar-light-client-solidity-types = { workspace = true }
 
 alloy-sol-types = { workspace = true }
-hex             = { workspace = true }
+hex             = { workspace = true, features = ["alloc"] }
 sha2            = { workspace = true }
 thiserror       = { workspace = true }
 

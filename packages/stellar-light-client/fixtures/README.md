@@ -1,6 +1,6 @@
 # Fixtures
 
-Pinned Stellar ledgers, so the fork builds and tests without network access or a second checkout. The published `ipsa-scp-verifier` crate excludes its own fixtures, so they cannot come from the dependency.
+Pinned Stellar ledgers, so the fork builds and tests without network access or a second checkout. The published `stellar-consensus-verifier` crate excludes its own fixtures, so they cannot come from the dependency.
 
 Everything here is raw, hex-encoded archive bytes. Nothing is a decoded struct, which is the point: the verifier decodes them, and a fixture that stored decoded values would be testing the decoder against itself.
 

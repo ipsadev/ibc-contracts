@@ -57,8 +57,8 @@ fn main() {
 
     let fixture = Fixture::load(&fixture_path);
 
-    let unbound = fixture.verify_natively(None);
-    let verified = fixture.verify_natively(Some(unbound.previous_ledger_hash));
+    let authenticated = fixture.authenticate_natively(None);
+    let header = authenticated.header();
 
     let trust_root_xdr = fixture.trust_root_xdr();
     let fingerprint: [u8; 32] = Sha256::digest(&trust_root_xdr).into();
@@ -96,12 +96,12 @@ fn main() {
         trust_root = hex::encode(fingerprint),
         router = hex::encode(router),
         topic = hex::encode(ROOT_EVENT_TOPIC),
-        slot = verified.slot,
-        close_time = verified.close_time,
-        ledger_hash = hex::encode(verified.ledger_hash),
-        previous_ledger_hash = hex::encode(verified.previous_ledger_hash),
-        bucket_list_hash = hex::encode(verified.bucket_list_hash),
-        tx_set_result_hash = hex::encode(verified.tx_set_result_hash),
+        slot = header.ledger_seq,
+        close_time = header.close_time,
+        ledger_hash = hex::encode(header.ledger_hash),
+        previous_ledger_hash = hex::encode(header.previous_ledger_hash),
+        bucket_list_hash = hex::encode(header.bucket_list_hash),
+        tx_set_result_hash = hex::encode(header.tx_set_result_hash),
     );
 
     std::fs::write(&output_path, &json)
@@ -110,8 +110,8 @@ fn main() {
     println!("wrote {}", output_path.display());
     println!();
     println!("network        {}", fixture.network);
-    println!("trusted ledger {}", verified.slot);
-    println!("ledger hash    {}", hex::encode(verified.ledger_hash));
+    println!("trusted ledger {}", header.ledger_seq);
+    println!("ledger hash    {}", hex::encode(header.ledger_hash));
     println!("trust root     {}", hex::encode(fingerprint));
     println!("router         {}", hex::encode(router));
     println!();
