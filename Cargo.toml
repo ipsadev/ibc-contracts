@@ -61,7 +61,7 @@ resolver = "2"
 version    = "0.1.0"
 edition    = "2021"
 license    = "Apache-2.0"
-repository = "https://github.com/cosmos/ibc-contracts"
+repository = "https://github.com/lfdt-ibc/ibc-contracts"
 keywords   = ["cosmos", "ibc", "sp1", "tendermint", "ethereum", "bridge", "solidity", "eureka"]
 
 [workspace.dependencies]
@@ -145,7 +145,7 @@ futures            = { version = "0.3", default-features = false }
 futures-timer      = { version = "3.0", default-features = false }
 clap               = { version = "4.5", default-features = false, features = ["std"] } # std feature is required for clap
 time               = { version = "0.3", default-features = false }
-dotenv             = { version = "0.15", default-features = false }
+dotenvy            = { version = "0.15", default-features = false }
 thiserror          = { version = "2.0", default-features = false }
 url                = { version = "2.5.7", default-features = false }
 reqwest            = { version = "0.12", default-features = false }
@@ -202,10 +202,10 @@ moka = { version = "0.12", features = ["future"] }
 uuid = { version = "1.18", default-features = false }
 
 # OpenTelemetry
-opentelemetry =         { version = "0.30", default-features = false }
-opentelemetry-otlp =    { version = "0.30", default-features = false }
-opentelemetry_sdk =     { version = "0.30", default-features = false }
-tracing-opentelemetry = { version = "0.31", default-features = false }
+opentelemetry =         { version = "0.33", default-features = false }
+opentelemetry-otlp =    { version = "0.33", default-features = false }
+opentelemetry_sdk =     { version = "0.33", default-features = false }
+tracing-opentelemetry = { version = "0.34", default-features = false }
 
 # The dependencies below are maintained by Sigma Prime (for use in Lighthouse (and the broader Ethereum ecosystem))
 ethereum_ssz        = { version = "0.10", default-features = false }
